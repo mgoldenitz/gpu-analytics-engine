@@ -1,6 +1,8 @@
 """Keep the int32 values below a threshold, on the GPU (stream compaction)."""
 import cupy as cp
 
+from engine.scan import exclusive_scan
+
 THREADS = 256
 
 # Step 1, predicate: flags[i] = 1 if row i passes, else 0.
@@ -19,10 +21,16 @@ extern "C" __global__ void scatter(const int* x, const int* flags, const int* po
 }''', 'scatter')
 
 
-def filter_less_than(x, threshold):
-    """Return the values of x below threshold, in their original order."""
+def filter_less_than(x, threshold, scan="own"):
+    """Return the values of x below threshold, in their original order.
+
+    scan="own" uses our scan kernel (engine/scan.py); scan="cub" uses CuPy's
+    cumsum, which runs NVIDIA CUB. Both stay so the benchmarks can compare them.
+    """
     if not isinstance(x, cp.ndarray) or x.dtype != cp.int32 or x.ndim != 1:
         raise TypeError("x must be a 1-D cupy int32 array")
+    if scan not in ("own", "cub"):
+        raise ValueError('scan must be "own" or "cub"')
     x = cp.ascontiguousarray(x)
     n = x.size
     if n == 0:
@@ -33,9 +41,11 @@ def filter_less_than(x, threshold):
     _flag(grid, (THREADS,), (x, flags, cp.int32(threshold), cp.int32(n)))
 
     # Step 2, exclusive prefix scan: pos[i] = number of passing rows before i.
-    # shortcut: the scan is CuPy's cumsum (CUB); replace with our own scan kernel later.
     # int32 positions limit n to 2^31 - 1 rows; 200M rows fits.
-    pos = cp.cumsum(flags, dtype=cp.int32) - flags
+    if scan == "own":
+        pos = exclusive_scan(flags)
+    else:
+        pos = cp.cumsum(flags, dtype=cp.int32) - flags
     count = int(pos[-1] + flags[-1])
 
     out = cp.empty(count, dtype=cp.int32)
