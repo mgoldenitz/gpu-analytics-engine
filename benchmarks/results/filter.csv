@@ -165,7 +165,7 @@ filter_cub,100000000,10,kernel_only,13.095
 filter_cub,100000000,10,e2e_pageable,58.636
 filter_cub,100000000,10,e2e_pinned,28.323
 filter_own,100000000,10,kernel_only,12.563
-filter_own,100000000,10,e2e_pageable,59.892
+filter_own,100000000,10,e2e_pageable,61.900
 filter_own,100000000,10,e2e_pinned,29.456
 pandas,100000000,50,cpu,682.822
 polars,100000000,50,cpu,38.208

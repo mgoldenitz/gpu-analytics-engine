@@ -14,11 +14,13 @@ from matplotlib.ticker import FuncFormatter
 RESULTS = Path(__file__).parent / "results"
 FIGS = Path(__file__).parent.parent / "docs" / "figures"
 
-# One color per engine in every chart, from the dataviz reference palette. These four pass
-# the validator on ALL pairs (colorblind and normal vision, light surface). All GPU lines
-# share one color; line style tells GPU variants apart.
-COLOR = {"pandas": "#257de0", "polars": "#f2a600", "duckdb": "#008a17", "gpu": "#e24d8b"}
-COPY_GRAY = "#9c9c9c"  # not an engine: the copy part of a GPU bar
+# One color per engine in every chart: GPU in NVIDIA green, CPU engines in three slate greys.
+# The validator passes colorblind and normal-vision separation on ALL pairs; greys fail its
+# chroma floor by design, so each CPU engine also gets its own marker shape.
+# All GPU lines share one color; dashed = GPU pageable or GPU global.
+COLOR = {"pandas": "#334155", "polars": "#64748b", "duckdb": "#9aa5b1", "gpu": "#76b900"}
+MARKER = {"pandas": "s", "polars": "^", "duckdb": "D", "gpu": "o"}
+COPY_GRAY = "#d4d4d4"  # not an engine: the copy part of a GPU bar, lighter than the CPU greys
 TEXT, TEXT2, GRID = "#191919", "#666666", "#e5e5e5"
 LABEL = {"pandas": "pandas", "polars": "Polars", "duckdb": "DuckDB"}
 LABEL_GAP_PT = 12  # smallest vertical distance between two end labels
@@ -48,7 +50,7 @@ def plain_fmt(x, _):
 
 def line(ax, xs, ys, key, label, dashed=False):
     """2px line with markers. Returns its end point and label for end_labels()."""
-    ax.plot(xs, ys, color=COLOR[key], lw=2, ls="--" if dashed else "-", marker="o", ms=5,
+    ax.plot(xs, ys, color=COLOR[key], lw=2, ls="--" if dashed else "-", marker=MARKER[key], ms=5,
             mec="white", mew=1)
     return xs[-1], ys[-1], label
 
