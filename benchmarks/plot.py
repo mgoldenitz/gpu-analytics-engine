@@ -14,13 +14,12 @@ from matplotlib.ticker import FuncFormatter
 RESULTS = Path(__file__).parent / "results"
 FIGS = Path(__file__).parent.parent / "docs" / "figures"
 
-# One color per engine in every chart: GPU in NVIDIA green, CPU engines in three slate greys.
-# The validator passes colorblind and normal-vision separation on ALL pairs; greys fail its
-# chroma floor by design, so each CPU engine also gets its own marker shape.
+# One color per engine in every chart: pandas blue and Polars orange (colorblind-safe pair),
+# DuckDB dark grey, GPU in NVIDIA green. Each engine also gets its own marker shape.
 # All GPU lines share one color; dashed = GPU pageable or GPU global.
-COLOR = {"pandas": "#334155", "polars": "#64748b", "duckdb": "#9aa5b1", "gpu": "#76b900"}
+COLOR = {"pandas": "#0072B2", "polars": "#E69F00", "duckdb": "#555555", "gpu": "#76b900"}
 MARKER = {"pandas": "s", "polars": "^", "duckdb": "D", "gpu": "o"}
-COPY_GRAY = "#d4d4d4"  # not an engine: the copy part of a GPU bar, lighter than the CPU greys
+COPY_GRAY = "#d4d4d4"  # not an engine: the copy part of a GPU bar, much lighter than DuckDB grey
 TEXT, TEXT2, GRID = "#191919", "#666666", "#e5e5e5"
 LABEL = {"pandas": "pandas", "polars": "Polars", "duckdb": "DuckDB"}
 LABEL_GAP_PT = 12  # smallest vertical distance between two end labels
