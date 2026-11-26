@@ -155,7 +155,7 @@ filter_cub,100000000,1,e2e_pinned,26.020
 filter_own,100000000,1,kernel_only,12.770
 filter_own,100000000,1,e2e_pageable,50.912
 filter_own,100000000,1,e2e_pinned,27.632
-pandas,100000000,10,cpu,401.315
+pandas,100000000,10,cpu,1500.760
 polars,100000000,10,cpu,48.645
 duckdb,100000000,10,cpu,181.163
 cupy_builtin,100000000,10,kernel_only,10.420

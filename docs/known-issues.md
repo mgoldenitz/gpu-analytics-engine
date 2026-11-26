@@ -11,7 +11,7 @@
 - Group-by needs the caller to give expected_groups. Too low gives an error, too high wastes memory.
 - Group-by output is in slot (hash) order, not key order.
 - CPU rerun, 3x each (2026-11-26): Polars 1K Zipf 100M 701/718/711 ms (repeats); Polars 1K 10M 49-55 ms uniform, 63-65 ms Zipf (repeats); DuckDB 1M uniform 100M 4175/6473/8673 ms (noisy, 2x spread; median of runs is within 5% of the CSV).
-- Filter pandas and DuckDB are faster at 100M than at 50M (401 vs 627 ms pandas). It is visible as a dip in `filter_crossover.png`.
+- Filter rerun at 10%, 3x each (2026-11-26): pandas 100M gave 1676/1501/413 ms (two modes, fast and slow; cause unknown). The CSV now has 1501 ms (was 401). pandas 200M (793 ms) is now the suspect point, as it is faster than 100M. DuckDB 100M repeats (186/186/197 vs 181 ms). DuckDB 50M is noisy (262/363/293 ms), so its dip at 100M is probably 50M noise.
 - Chart titles are fixed text. Rerun the benchmarks and the titles can be wrong.
 - Group-by rerun (2026-11-26, both strategies): the old GPU 10M 1K-groups point (7.7 ms) is now 1.99 ms, below e2e_pinned. Still suspect: Polars 1K Zipf at 100M is 710 ms vs 106 ms uniform (also 717 ms in the first run, so it repeats; cause unknown). Polars 1K groups at 10M is 48 ms, 4.8 ms per 1M rows, vs 1.1 ms per 1M rows at 100M. DuckDB 1M uniform groups at 100M is 6815 ms, 4x its Zipf time.
 - Group-by with 1M groups: the table is 2M slots x 16 bytes = 32 MB, about the size of the L2 cache, so the random atomics go to DRAM. That is why 1M groups is slower than 1K groups.

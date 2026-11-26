@@ -18,6 +18,7 @@
 - Block vs global kernel_only: 10 groups 5.4 to 7.4x faster, 1K groups 1.3 to 1.8x faster, 1M groups uniform about equal (5.6% slower at 100M), 1M groups Zipf 2.8 to 3.1x faster.
 - Block e2e pinned now beats Polars at 10 groups: 5.1 vs 10.4 ms at 10M, 43.1 vs 88.4 ms at 100M (uniform), about 2x.
 - `benchmarks/plot.py` writes 4 PNGs to `docs/figures/` (filter crossover, filter time split, group-by by groups, block speedup).
+- Filter pandas 100M 10% rerun: `filter.csv` updated 401 to 1501 ms. Chart 1 title fixed.
 - Reran suspect CPU points 3x each: none changed more than 20%, so `groupby.csv` stays.
 - /reflect: 4 new rules in CLAUDE.md (int64 sums in every engine, check cited paths with gh api, run new tests red first, racecheck and synccheck for kernels with barriers).
 

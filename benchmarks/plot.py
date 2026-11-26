@@ -82,7 +82,7 @@ def filter_crossover(f):
     ax.set_xlim(right=sizes[-1] * 3.2)  # room for the end labels
     ax.legend(loc="upper left", fontsize=8)
     save(fig, "filter_crossover.png", "Filter, 10% selectivity: GPU beats pandas and DuckDB at "
-         "every size; Polars only with pinned memory")
+         "every size. Pinned beats Polars from 10M rows; pageable beats it only at 10M")
 
 
 def filter_time_split(f):
