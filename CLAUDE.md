@@ -31,6 +31,14 @@ pytest path\to\test_file.py::test_name   # one test
 
 The venv is at `C:\venvs\gpu-analytics-engine`, outside OneDrive. Installed: cupy-cuda13x 14.2.0, numpy, pandas, polars, duckdb, pyarrow, pytest, matplotlib. The venv is Python 3.14.7.
 
+Memory check for kernels. compute-sanitizer is not on PATH, so use the full path. CuPy's memory pool rounds each allocation up to 512 bytes, and memcheck cannot see a small overrun inside that rounding, so turn the pool off:
+
+```
+& "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.5\compute-sanitizer\compute-sanitizer.exe" --tool memcheck python -c "import cupy, pytest, sys; cupy.cuda.set_allocator(None); sys.exit(pytest.main(['tests', '-q']))"
+```
+
+The last line must be `ERROR SUMMARY: 0 errors`.
+
 TPC-H data comes from DuckDB: `CALL dbgen(sf=1)` (about 6M lineitem rows). Load only the columns a query needs.
 
 ## Repo hooks
