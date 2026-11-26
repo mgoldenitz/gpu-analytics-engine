@@ -22,4 +22,5 @@
 - Block group-by: each block takes 4096 rows (16 per thread), not 256. With one row per thread, a block sees at most 256 keys, so a 1024-slot table can never fill and there would be no fallback case to test.
 - Shared table: 1024 slots x 16 bytes = 16 KB per block. A row probes at most 32 shared slots, then goes straight to the global table, so a full shared table does not cost 1024 probes per row.
 - `groupby.csv` keeps one `engine` (`hash_groupby`) and adds a `strategy` column, so a filter on one column picks a strategy. CPU rows have `-`.
+- Charts: one fixed color per engine (dataviz reference palette slots 1-6, validator pass on light surface). Copy time = e2e time minus kernel_only time, so it includes allocation overhead. Uniform vs Zipf use texture, not a second hue, because both are the block engine.
 - One `__device__ add_global` for both strategies and for the flush, so there is only one global probe loop.
