@@ -16,12 +16,12 @@ Layout:
 ## Rules
 
 - Data lives in `C:\data\gpu-analytics-engine` and never in the repo. Do not write `.parquet` or generated datasets inside the project folder (it is in OneDrive).
-- Every kernel gets a pytest that checks its results against pandas.
-- Benchmarks report kernel_only, e2e_pageable and e2e_pinned times, against pandas, Polars and DuckDB.
+- Every kernel gets a pytest that checks its results against pandas. Write the test first and run it once before the kernel exists. It must fail.
+- Benchmarks report kernel_only, e2e_pageable and e2e_pinned times, against pandas, Polars and DuckDB. Every engine must sum int32 as int64: Polars needs `.cast(pl.Int64)`, DuckDB needs `::BIGINT`.
 - Before a full benchmark run, check free RAM (Get-CimInstance Win32_OperatingSystem). If it is below 5 GB, stop and ask the owner to close programs.
 - Crossover point = the smallest n from which the GPU wins at that size and at all larger sizes, not the first n where it wins once.
 - Explain every kernel line by line before moving on.
-- Write our own kernels. Read and cite the reference repos in `PROJECT_NOTES.md` (cuda-samples, CCCL/CUB, cuCollections, cudf), do not copy them.
+- Write our own kernels. Read and cite the reference repos in `PROJECT_NOTES.md` (cuda-samples, CCCL/CUB, cuCollections, cudf), do not copy them. Before you write a cited path, make sure that it exists: `gh api repos/<owner>/<repo>/contents/<path>`.
 - cuDF/RAPIDS is last and runs only in WSL2 with a CUDA 13.4 toolkit. Do not add it to the Windows venv.
 - Minimum shippable version: filter and group-by kernels, the three CPU baselines, a crossover chart (data size where the GPU starts to win), and a README that explains where and why the GPU wins or loses.
 
@@ -45,6 +45,8 @@ Memory check for kernels. compute-sanitizer is not on PATH, so use the full path
 ```
 
 The last line must be `ERROR SUMMARY: 0 errors`.
+
+For kernels with `__syncthreads()`, also run `--tool racecheck` and `--tool synccheck` with the same command. racecheck does not find races between shared atomics and plain shared reads (removing a barrier gave 0 hazards but wrong counts), so the pandas tests are the real check.
 
 TPC-H data comes from DuckDB: `CALL dbgen(sf=1)` (about 6M lineitem rows). Load only the columns a query needs.
 
