@@ -58,6 +58,18 @@ def cpu_engines(x):
     }
 
 
+def pinned_empty(n):
+    """A numpy int32 array in page-locked host memory (the array keeps the buffer alive)."""
+    return np.frombuffer(cp.cuda.alloc_pinned_memory(max(n, 1) * 4), np.int32, n)
+
+
+def to_host_pinned(d, out_pin):
+    """Copy device array d into the front of the pinned buffer; return that view."""
+    view = out_pin[:d.size]
+    d.get(out=view)
+    return view
+
+
 def check(engine, got, expected):
     if not np.array_equal(got, expected):
         raise AssertionError(f"{engine} result differs from pandas")
@@ -68,6 +80,9 @@ def bench_size(n, rows, skipped):
     ts = thresholds(x)
     cpu = cpu_engines(x)
     xd = cp.asarray(x)
+    x_pin = pinned_empty(n)  # input already in pinned memory, as a pinned data loader would give it
+    x_pin[:] = x
+    out_pin = pinned_empty(n)  # large enough for any selectivity
     for pct, t in ts.items():
         expected = cpu["pandas"](t)
         for name, f in cpu.items():
@@ -78,12 +93,16 @@ def bench_size(n, rows, skipped):
                 skipped.append(f"{name} n={n:,}: needs about {n * bytes_per_row / 1e9:.1f} GB")
                 continue
             check(name, cp.asnumpy(f(xd, t)), expected)
-            rows.append((name, n, pct, "kernel", median_ms(lambda: f(xd, t))))
-            rows.append((name, n, pct, "end_to_end",
+            check(name + " pinned", to_host_pinned(f(cp.asarray(x_pin), t), out_pin), expected)
+            rows.append((name, n, pct, "kernel_only", median_ms(lambda: f(xd, t))))
+            rows.append((name, n, pct, "e2e_pageable",
                          median_ms(lambda: cp.asnumpy(f(cp.asarray(x), t)))))
+            rows.append((name, n, pct, "e2e_pinned",
+                         median_ms(lambda: to_host_pinned(f(cp.asarray(x_pin), t), out_pin))))
         print(f"n={n:,} sel={pct}% done", flush=True)
-    del xd
+    del xd, x_pin, out_pin
     cp.get_default_memory_pool().free_all_blocks()
+    cp.get_default_pinned_memory_pool().free_all_blocks()
 
 
 def main():

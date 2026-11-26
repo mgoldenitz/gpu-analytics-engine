@@ -13,11 +13,12 @@ extern "C" __global__ void flag_lt(const int* x, int* flags, int threshold, int 
 }''', 'flag_lt')
 
 # Step 3, scatter: each passing row writes itself to its slot in the output.
+# pos is an exclusive scan (shift = 0) or an inclusive scan (shift = 1, slot = pos[i] - 1).
 _scatter = cp.RawKernel(r'''
 extern "C" __global__ void scatter(const int* x, const int* flags, const int* pos,
-                                   int* out, int n) {
+                                   int* out, int shift, int n) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < n && flags[i]) out[pos[i]] = x[i];
+  if (i < n && flags[i]) out[pos[i] - shift] = x[i];
 }''', 'scatter')
 
 
@@ -40,14 +41,16 @@ def filter_less_than(x, threshold, scan="own"):
     flags = cp.empty(n, dtype=cp.int32)
     _flag(grid, (THREADS,), (x, flags, cp.int32(threshold), cp.int32(n)))
 
-    # Step 2, exclusive prefix scan: pos[i] = number of passing rows before i.
-    # int32 positions limit n to 2^31 - 1 rows; 200M rows fits.
+    # Step 2, prefix scan. int32 positions limit n to 2^31 - 1 rows; 200M rows fits.
     if scan == "own":
-        pos = exclusive_scan(flags)
+        pos = exclusive_scan(flags)  # passing rows before i
+        shift = 0
+        count = int(pos[-1] + flags[-1])
     else:
-        pos = cp.cumsum(flags, dtype=cp.int32) - flags
-    count = int(pos[-1] + flags[-1])
+        pos = cp.cumsum(flags, dtype=cp.int32)  # passing rows up to and including i
+        shift = 1  # no extra subtraction pass; the scatter subtracts 1
+        count = int(pos[-1])
 
     out = cp.empty(count, dtype=cp.int32)
-    _scatter(grid, (THREADS,), (x, flags, pos, out, cp.int32(n)))
+    _scatter(grid, (THREADS,), (x, flags, pos, out, cp.int32(shift), cp.int32(n)))
     return out
