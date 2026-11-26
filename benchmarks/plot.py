@@ -14,16 +14,14 @@ from matplotlib.ticker import FuncFormatter
 RESULTS = Path(__file__).parent / "results"
 FIGS = Path(__file__).parent.parent / "docs" / "figures"
 
-# One color per engine in every chart. Slots 1-6 of the dataviz reference palette,
-# in its validated order (colorblind-safe on adjacent pairs, light surface).
-COLOR = {
-    "pandas": "#257de0", "polars": "#f47230", "duckdb": "#00b894",
-    "filter_own": "#f2a600", "global": "#ee7fac", "block": "#008a17",
-}
+# One color per engine in every chart, from the dataviz reference palette. These four pass
+# the validator on ALL pairs (colorblind and normal vision, light surface). All GPU lines
+# share one color; line style tells GPU variants apart.
+COLOR = {"pandas": "#257de0", "polars": "#f2a600", "duckdb": "#008a17", "gpu": "#e24d8b"}
 COPY_GRAY = "#9c9c9c"  # not an engine: the copy part of a GPU bar
 TEXT, TEXT2, GRID = "#191919", "#666666", "#e5e5e5"
-LABEL = {"pandas": "pandas", "polars": "Polars", "duckdb": "DuckDB",
-         "global": "GPU global (pinned)", "block": "GPU block (pinned)"}
+LABEL = {"pandas": "pandas", "polars": "Polars", "duckdb": "DuckDB"}
+LABEL_GAP_PT = 12  # smallest vertical distance between two end labels
 
 plt.rcParams.update({
     "font.size": 9, "axes.edgecolor": TEXT2, "axes.labelcolor": TEXT, "text.color": TEXT,
@@ -48,18 +46,35 @@ def plain_fmt(x, _):
     return f"{x:,.0f}" if x >= 1 else f"{x:g}"
 
 
-def line(ax, xs, ys, key, label, dashed=False, dy=0):
-    """2px line with markers and a direct label at its right end (text stays in text ink).
-    dy moves the label up or down in points when two lines end at about the same value."""
+def line(ax, xs, ys, key, label, dashed=False):
+    """2px line with markers. Returns its end point and label for end_labels()."""
     ax.plot(xs, ys, color=COLOR[key], lw=2, ls="--" if dashed else "-", marker="o", ms=5,
-            mec="white", mew=1, label=label)
-    ax.annotate(label, (xs[-1], ys[-1]), xytext=(6, dy), textcoords="offset points",
-                va="center", fontsize=8, color=TEXT)
+            mec="white", mew=1)
+    return xs[-1], ys[-1], label
 
 
-def save(fig, name, title):
+def end_labels(ax, ends):
+    """Write each line's label at its right end, pushed apart so no two overlap.
+    Works in screen points, so it is right on log and linear axes. Text stays in text ink."""
+    ax.set_ylim(ax.get_ylim())  # freeze the axis so the positions below stay true
+    pt = 72 / ax.figure.dpi
+    ends = sorted(ends, key=lambda e: ax.transData.transform(e[:2])[1])
+    want = [ax.transData.transform(e[:2])[1] * pt for e in ends]
+    placed = []
+    for y in want:  # bottom to top: each label at least LABEL_GAP_PT above the one below
+        placed.append(max(y, placed[-1] + LABEL_GAP_PT) if placed else y)
+    shift = (sum(want) - sum(placed)) / len(placed)  # center the group on its lines again
+    for (x, y, text), w, p in zip(ends, want, placed):
+        ax.annotate(text, (x, y), xytext=(6, p + shift - w), textcoords="offset points",
+                    va="center", fontsize=8, color=TEXT)
+
+
+def save(fig, name, title, ends=None):
+    """ends = (ax, end points): labels go on after the layout is final, so they are placed right."""
     fig.suptitle(textwrap.fill(title, 75), x=0.02, ha="left", fontsize=10.5, fontweight="bold")
     fig.tight_layout()
+    if ends:
+        end_labels(*ends)
     fig.savefig(FIGS / name, dpi=200, facecolor="white")
     plt.close(fig)
     print("wrote", FIGS / name)
@@ -68,21 +83,20 @@ def save(fig, name, title):
 def filter_crossover(f):
     sizes = sorted({int(k[1]) for k in f})
     fig, ax = plt.subplots(figsize=(8, 4.6))
-    # Polars and GPU pageable end close together: split their labels.
-    for e, dy in (("pandas", 0), ("polars", -5), ("duckdb", 0)):
-        line(ax, sizes, [f[(e, str(n), "10", "cpu")] for n in sizes], e, LABEL[e], dy=dy)
-    for mode, dashed, dy in (("e2e_pageable", True, 5), ("e2e_pinned", False, 0)):
+    ends = [line(ax, sizes, [f[(e, str(n), "10", "cpu")] for n in sizes], e, LABEL[e])
+            for e in ("pandas", "polars", "duckdb")]
+    for mode, dashed in (("e2e_pageable", True), ("e2e_pinned", False)):
         ys = [f[("filter_own", str(n), "10", mode)] for n in sizes]
-        line(ax, sizes, ys, "filter_own", f"GPU filter {mode[4:]}", dashed, dy)
+        ends.append(line(ax, sizes, ys, "gpu", f"GPU filter {mode[4:]}", dashed))
     ax.set(xscale="log", yscale="log", xlabel="Rows (log scale)",
            ylabel="Median time, ms (log scale)")
     ax.xaxis.set_major_formatter(FuncFormatter(rows_fmt))
     ax.yaxis.set_major_formatter(FuncFormatter(plain_fmt))
     ax.set_xticks(sizes)
     ax.set_xlim(right=sizes[-1] * 3.2)  # room for the end labels
-    ax.legend(loc="upper left", fontsize=8)
     save(fig, "filter_crossover.png", "Filter, 10% selectivity: GPU beats pandas and DuckDB at "
-         "every size. Pinned beats Polars from 10M rows; pageable beats it only at 10M")
+         "every size. Pinned beats Polars from 10M rows; pageable beats it only at 10M",
+         (ax, ends))
 
 
 def filter_time_split(f):
@@ -94,7 +108,7 @@ def filter_time_split(f):
     copies[0] = 0.0  # kernel_only has no copy by definition
     fig, ax = plt.subplots(figsize=(7, 4.2))
     x = range(len(modes))
-    ax.bar(x, [kernel] * 3, width=0.55, color=COLOR["filter_own"], label="Kernel",
+    ax.bar(x, [kernel] * 3, width=0.55, color=COLOR["gpu"], label="Kernel",
            edgecolor="white", linewidth=2)
     ax.bar(x, copies, bottom=kernel, width=0.55, color=COPY_GRAY,
            label="Copy and transfer overhead", edgecolor="white", linewidth=2)
@@ -114,22 +128,19 @@ def filter_time_split(f):
 def groupby_by_groups(g):
     n, groups = "100000000", [10, 1_000, 1_000_000]
     fig, ax = plt.subplots(figsize=(8, 4.6))
-    # pandas and DuckDB end at about the same time, and so do global and block: split the labels.
-    for e, dy in (("pandas", -7), ("polars", 0), ("duckdb", 7)):
-        ys = [g[(e, "-", n, str(k), "uniform", "cpu")] for k in groups]
-        line(ax, groups, ys, e, LABEL[e], dy=dy)
-    for st, dy in (("global", -7), ("block", 7)):
+    ends = [line(ax, groups, [g[(e, "-", n, str(k), "uniform", "cpu")] for k in groups],
+                 e, LABEL[e]) for e in ("pandas", "polars", "duckdb")]
+    for st, dashed in (("global", True), ("block", False)):
         ys = [g[("hash_groupby", st, n, str(k), "uniform", "e2e_pinned")] for k in groups]
-        line(ax, groups, ys, st, LABEL[st], dy=dy)
+        ends.append(line(ax, groups, ys, "gpu", f"GPU {st} (pinned)", dashed))
     ax.set(xscale="log", yscale="log", xlabel="Number of groups (log scale)",
            ylabel="Median time, ms (log scale)")
     ax.set_xticks(groups)
     ax.xaxis.set_major_formatter(FuncFormatter(plain_fmt))
     ax.yaxis.set_major_formatter(FuncFormatter(plain_fmt))
     ax.set_xlim(5, 2e7)  # room for the end labels
-    ax.legend(loc="upper left", fontsize=8)
     save(fig, "groupby_by_groups.png", "Group-by, 100M rows, uniform keys: GPU block beats every "
-         "CPU engine at all group counts; global loses to Polars at 10")
+         "CPU engine at all group counts; global loses to Polars at 10", (ax, ends))
 
 
 def groupby_block_speedup(g):
@@ -141,7 +152,7 @@ def groupby_block_speedup(g):
               g[("hash_groupby", "block", n, k, dist, "kernel_only")] for k in groups]
         xs = [i + (j - 0.5) * w for i in range(len(groups))]
         # Same engine (block) both times: texture, not a second hue, tells the keys apart.
-        ax.bar(xs, sp, width=w, color=COLOR["block"], hatch="//" if dist == "zipf" else None,
+        ax.bar(xs, sp, width=w, color=COLOR["gpu"], hatch="//" if dist == "zipf" else None,
                edgecolor="white", linewidth=2, label=f"{dist.capitalize()} keys")
         for x, s in zip(xs, sp):
             ax.annotate(f"{s:.2f}x", (x, s), xytext=(0, 3), textcoords="offset points",

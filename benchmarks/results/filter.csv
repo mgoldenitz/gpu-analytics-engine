@@ -107,9 +107,9 @@ filter_cub,50000000,1,e2e_pinned,19.706
 filter_own,50000000,1,kernel_only,6.828
 filter_own,50000000,1,e2e_pageable,56.537
 filter_own,50000000,1,e2e_pinned,21.092
-pandas,50000000,10,cpu,627.190
-polars,50000000,10,cpu,67.560
-duckdb,50000000,10,cpu,268.635
+pandas,50000000,10,cpu,194.187
+polars,50000000,10,cpu,25.481
+duckdb,50000000,10,cpu,85.052
 cupy_builtin,50000000,10,kernel_only,6.027
 cupy_builtin,50000000,10,e2e_pageable,66.983
 cupy_builtin,50000000,10,e2e_pinned,22.889
@@ -117,8 +117,8 @@ filter_cub,50000000,10,kernel_only,7.528
 filter_cub,50000000,10,e2e_pageable,80.095
 filter_cub,50000000,10,e2e_pinned,22.532
 filter_own,50000000,10,kernel_only,6.878
-filter_own,50000000,10,e2e_pageable,83.489
-filter_own,50000000,10,e2e_pinned,22.396
+filter_own,50000000,10,e2e_pageable,64.285
+filter_own,50000000,10,e2e_pinned,16.379
 pandas,50000000,50,cpu,965.928
 polars,50000000,50,cpu,42.097
 duckdb,50000000,50,cpu,404.795
@@ -155,7 +155,7 @@ filter_cub,100000000,1,e2e_pinned,26.020
 filter_own,100000000,1,kernel_only,12.770
 filter_own,100000000,1,e2e_pageable,50.912
 filter_own,100000000,1,e2e_pinned,27.632
-pandas,100000000,10,cpu,1500.760
+pandas,100000000,10,cpu,395.738
 polars,100000000,10,cpu,48.645
 duckdb,100000000,10,cpu,181.163
 cupy_builtin,100000000,10,kernel_only,10.420
@@ -203,9 +203,9 @@ filter_cub,200000000,1,e2e_pinned,50.280
 filter_own,200000000,1,kernel_only,22.770
 filter_own,200000000,1,e2e_pageable,103.812
 filter_own,200000000,1,e2e_pinned,55.942
-pandas,200000000,10,cpu,793.457
-polars,200000000,10,cpu,95.054
-duckdb,200000000,10,cpu,305.656
+pandas,200000000,10,cpu,779.227
+polars,200000000,10,cpu,81.310
+duckdb,200000000,10,cpu,302.867
 cupy_builtin,200000000,10,kernel_only,20.217
 cupy_builtin,200000000,10,e2e_pageable,111.648
 cupy_builtin,200000000,10,e2e_pinned,55.338
@@ -213,8 +213,8 @@ filter_cub,200000000,10,kernel_only,25.557
 filter_cub,200000000,10,e2e_pageable,114.143
 filter_cub,200000000,10,e2e_pinned,54.229
 filter_own,200000000,10,kernel_only,24.782
-filter_own,200000000,10,e2e_pageable,118.300
-filter_own,200000000,10,e2e_pinned,60.488
+filter_own,200000000,10,e2e_pageable,150.529
+filter_own,200000000,10,e2e_pinned,62.590
 pandas,200000000,50,cpu,1544.937
 polars,200000000,50,cpu,75.783
 duckdb,200000000,50,cpu,518.921
