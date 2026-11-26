@@ -19,3 +19,6 @@
 - Group-by benchmark: expected_groups = the true number of distinct keys (Zipf leaves some keys unused). Keys are random distinct values in [0, 2^31 - 1), not 0..g-1.
 - Polars casts values to Int64 before sum, because Polars sums Int32 as Int32 and overflows. DuckDB uses `SUM(v)::BIGINT` (its SUM gives HUGEINT). pandas uses `sort=False`, as there is no ORDER BY.
 - `pinned_empty` takes a dtype now, for the int64 output columns.
+- Block group-by: each block takes 4096 rows (16 per thread), not 256. With one row per thread, a block sees at most 256 keys, so a 1024-slot table can never fill and there would be no fallback case to test.
+- Shared table: 1024 slots x 16 bytes = 16 KB per block. A row probes at most 32 shared slots, then goes straight to the global table, so a full shared table does not cost 1024 probes per row.
+- One `__device__ add_global` for both strategies and for the flush, so there is only one global probe loop.

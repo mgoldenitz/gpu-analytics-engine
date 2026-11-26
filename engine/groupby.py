@@ -5,6 +5,13 @@ static_map in NVIDIA/cuCollections (include/cuco/static_map.cuh and its
 linear_probing probing scheme). Our version is much smaller: one key type,
 no cooperative groups, no window loads. The hash is the 32-bit finalizer
 (fmix32) of MurmurHash3 by Austin Appleby.
+
+strategy="block" first adds up rows in a per-block hash table in shared memory.
+cuCollections puts a hash table in shared memory in
+examples/static_set/shared_memory_example.cu; we do the same with a map. The
+CUDA C++ Programming Guide describes atomic functions on shared memory
+(section "Atomic Functions": they work on 32- and 64-bit words in global or
+shared memory, and are atomic only within the thread block for shared memory).
 """
 import cupy as cp
 
@@ -27,24 +34,75 @@ __device__ unsigned int hash32(unsigned int h) {
   return h;
 }
 
-// Step 1, insert: one thread per row adds its value into its key's slot.
-extern "C" __global__ void insert(const int* keys, const int* vals, int n,
-                                  int* t_keys, unsigned long long* t_sums, int* t_counts,
-                                  unsigned int mask, int* overflow) {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-  int key = keys[i];
+// Add (sum, count) into key's slot of the global table. Used by both strategies.
+__device__ void add_global(int key, unsigned long long sum, int count,
+                           int* t_keys, unsigned long long* t_sums, int* t_counts,
+                           unsigned int mask, int* overflow) {
   unsigned int slot = hash32((unsigned int)key) & mask;  // capacity is a power of two
   for (unsigned int probe = 0; probe <= mask; probe++) {
     int prev = atomicCAS(&t_keys[slot], EMPTY, key);
     if (prev == EMPTY || prev == key) {
-      atomicAdd(&t_sums[slot], (unsigned long long)(long long)vals[i]);  // sign-extend
-      atomicAdd(&t_counts[slot], 1);
+      atomicAdd(&t_sums[slot], sum);
+      atomicAdd(&t_counts[slot], count);
       return;
     }
     slot = (slot + 1) & mask;  // linear probing, wraps at the end
   }
   *overflow = 1;  // every slot holds another key
+}
+
+// Step 1, strategy="global": one thread per row adds its value into its key's slot.
+extern "C" __global__ void insert(const int* keys, const int* vals, int n,
+                                  int* t_keys, unsigned long long* t_sums, int* t_counts,
+                                  unsigned int mask, int* overflow) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+  add_global(keys[i], (unsigned long long)(long long)vals[i], 1,  // sign-extend
+             t_keys, t_sums, t_counts, mask, overflow);
+}
+
+#define SLOTS 1024           // shared table per block: 1024 * (4 + 8 + 4) bytes = 16 KB
+#define ROWS_PER_BLOCK 4096  // 16 rows per thread, so a block can see more keys than SLOTS
+#define SHARED_PROBES 32     // after this many taken slots, the row goes to global
+
+// Step 1, strategy="block": add up the block's rows in shared memory, then flush once per key.
+extern "C" __global__ void insert_block(const int* keys, const int* vals, int n,
+                                        int* t_keys, unsigned long long* t_sums, int* t_counts,
+                                        unsigned int mask, int* overflow) {
+  __shared__ int s_keys[SLOTS];
+  __shared__ unsigned long long s_sums[SLOTS];
+  __shared__ int s_counts[SLOTS];
+  for (int s = threadIdx.x; s < SLOTS; s += blockDim.x) {
+    s_keys[s] = EMPTY;
+    s_sums[s] = 0;
+    s_counts[s] = 0;
+  }
+  __syncthreads();  // barrier 1: the table is empty before any thread inserts
+
+  int start = blockIdx.x * ROWS_PER_BLOCK;
+  int end = min(start + ROWS_PER_BLOCK, n);
+  for (int i = start + threadIdx.x; i < end; i += blockDim.x) {  // no early return: all reach barrier 2
+    int key = keys[i];
+    unsigned long long v = (unsigned long long)(long long)vals[i];  // sign-extend
+    unsigned int slot = hash32((unsigned int)key) & (SLOTS - 1);
+    bool placed = false;
+    for (int probe = 0; probe < SHARED_PROBES; probe++) {
+      int prev = atomicCAS(&s_keys[slot], EMPTY, key);
+      if (prev == EMPTY || prev == key) {
+        atomicAdd(&s_sums[slot], v);
+        atomicAdd(&s_counts[slot], 1);
+        placed = true;
+        break;
+      }
+      slot = (slot + 1) & (SLOTS - 1);
+    }
+    if (!placed) add_global(key, v, 1, t_keys, t_sums, t_counts, mask, overflow);  // fallback
+  }
+  __syncthreads();  // barrier 2: every shared add is done before any thread reads a slot
+
+  for (int s = threadIdx.x; s < SLOTS; s += blockDim.x)  // flush: one global update per key
+    if (s_keys[s] != EMPTY)
+      add_global(s_keys[s], s_sums[s], s_counts[s], t_keys, t_sums, t_counts, mask, overflow);
 }
 
 // Step 2, flag: same as the filter predicate, flags[s] = 1 if slot s is used.
@@ -70,6 +128,8 @@ extern "C" __global__ void scatter(const int* t_keys, const unsigned long long* 
 
 _module = cp.RawModule(code=_SOURCE)
 _insert = _module.get_function('insert')
+_insert_block = _module.get_function('insert_block')
+ROWS_PER_BLOCK = 4096  # same as the #define in _SOURCE
 _flag_used = _module.get_function('flag_used')
 _scatter = _module.get_function('scatter')
 
@@ -78,12 +138,16 @@ def _grid(n):
     return ((n + THREADS - 1) // THREADS,)
 
 
-def group_by_sum_count(keys, values, expected_groups):
+def group_by_sum_count(keys, values, expected_groups, strategy="global"):
     """Return (keys int32, sums int64, counts int64), one row per distinct key, in no order.
 
     expected_groups sets the table size: the next power of two >= 2 * expected_groups.
+    strategy="global" does one global atomic update per row; "block" adds up each block's
+    rows in shared memory first, then does one global update per key per block.
     Raises RuntimeError if the input has more distinct keys than the table holds.
     """
+    if strategy not in ("global", "block"):
+        raise ValueError('strategy must be "global" or "block"')
     for name, a in (("keys", keys), ("values", values)):
         if not isinstance(a, cp.ndarray) or a.dtype != cp.int32 or a.ndim != 1:
             raise TypeError(f"{name} must be a 1-D cupy int32 array")
@@ -104,8 +168,11 @@ def group_by_sum_count(keys, values, expected_groups):
     t_sums = cp.zeros(cap, dtype=cp.uint64)
     t_counts = cp.zeros(cap, dtype=cp.int32)
     overflow = cp.zeros(1, dtype=cp.int32)
-    _insert(_grid(n), (THREADS,), (keys, values, cp.int32(n), t_keys, t_sums, t_counts,
-                                   cp.uint32(cap - 1), overflow))
+    args = (keys, values, cp.int32(n), t_keys, t_sums, t_counts, cp.uint32(cap - 1), overflow)
+    if strategy == "global":
+        _insert(_grid(n), (THREADS,), args)
+    else:
+        _insert_block(((n + ROWS_PER_BLOCK - 1) // ROWS_PER_BLOCK,), (THREADS,), args)
     if int(overflow[0]):
         raise RuntimeError(f"hash table full: more than {cap} distinct keys; "
                            "raise expected_groups")

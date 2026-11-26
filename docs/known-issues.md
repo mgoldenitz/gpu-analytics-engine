@@ -11,3 +11,5 @@
 - Group-by output is in slot (hash) order, not key order.
 - Group-by run is noisy in some points. Polars 1K groups: 261 ms at 50M but 109 ms at 100M uniform, and 717 ms at 100M Zipf. GPU kernel_only at 10M, 1K groups: 7.7 ms, but 0.5 ms at 1M and 10.9 ms at 50M, and slower than e2e_pinned (5.4 ms). Rerun with nothing else open before the chart.
 - Group-by with 1M groups: the table is 2M slots x 16 bytes = 32 MB, about the size of the L2 cache, so the random atomics go to DRAM. That is why 1M groups is slower than 1K groups.
+- racecheck does not find races between shared atomics and plain shared reads. Test: with barrier 2 removed, the count was wrong (3947 of 4096) and racecheck still gave 0 hazards, also with `--racecheck-detect-level info`. The pandas tests are the real check for the block kernel.
+- Block strategy with many distinct keys per block (for example 1M groups): most rows miss the shared table and go to global, so it does the global work plus the extra shared probes. It can be slower than `global`.
