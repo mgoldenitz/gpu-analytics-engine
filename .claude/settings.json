@@ -1,0 +1,69 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(.env.local)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "PowerShell(git push*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-line-limit.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Checking the 300-line limit"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-secrets.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Checking for keys in the change"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git status --short --branch",
+            "timeout": 10,
+            "statusMessage": "Re-checking the working tree after compaction"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "huggingface-skills@claude-plugins-official": false,
+    "hf-cli@huggingface-skills": false,
+    "manim-skill@manim-skill": false,
+    "imagegen-skills@imagegen-skills": false,
+    "yylo-skills@yylo-skills": false,
+    "autoresearch@autoresearch": false,
+    "academy-guide@anthropic-agent-skills": false,
+    "planning-with-files@planning-with-files": false,
+    "code-craftsmanship@wondelai-skills": false,
+    "mattpocock-skills@claude-plugins-official": false,
+    "example-skills@anthropic-agent-skills": false,
+    "document-skills@anthropic-agent-skills": false,
+    "humanizer@humanizer": false,
+    "feature-dev@claude-plugins-official": false,
+    "code-simplifier@anthropic-plugin-directory": false
+  }
+}

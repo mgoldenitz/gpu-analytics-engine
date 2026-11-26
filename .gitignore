@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.parquet
+.env*
+.claude/worktrees/
+.claude/settings.local.json
+.impeccable/
