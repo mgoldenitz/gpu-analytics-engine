@@ -18,6 +18,7 @@ from engine.groupby import group_by_sum_count
 OUT = Path(__file__).parent / "results" / "groupby.csv"
 DISTS = ["uniform", "zipf"]
 GPU_MODES = ["kernel_only", "e2e_pageable", "e2e_pinned"]
+STRATEGIES = ["global", "block"]
 
 
 def cpu_engines(k, v):
@@ -58,8 +59,8 @@ def check(engine, got, expected):
         raise AssertionError(f"{engine} result differs from pandas")
 
 
-def gpu_modes(k, v, kd, vd, k_pin, v_pin, groups):
-    f = lambda a, b: group_by_sum_count(a, b, expected_groups=groups)
+def gpu_modes(k, v, kd, vd, k_pin, v_pin, groups, strategy):
+    f = lambda a, b: group_by_sum_count(a, b, expected_groups=groups, strategy=strategy)
     outs = [pinned_empty(groups, t) for t in (np.int32, np.int64, np.int64)]
     return {
         "kernel_only": lambda: f(kd, vd),
@@ -85,10 +86,11 @@ def bench_size(n, rows):
             true_groups = expected[0].size  # Zipf leaves some keys unused
             for name, f in cpu.items():
                 check(name, columns(name, f()), expected)
-                rows.append((name, n, groups, dist, "cpu", median_ms(f)))
-            for mode, f in gpu_modes(k, v, kd, vd, k_pin, v_pin, true_groups).items():
-                check(f"hash_groupby {mode}", columns("gpu", f()), expected)
-                rows.append(("hash_groupby", n, groups, dist, mode, median_ms(f)))
+                rows.append((name, "-", n, groups, dist, "cpu", median_ms(f)))
+            for st in STRATEGIES:
+                for mode, f in gpu_modes(k, v, kd, vd, k_pin, v_pin, true_groups, st).items():
+                    check(f"hash_groupby {st} {mode}", columns("gpu", f()), expected)
+                    rows.append(("hash_groupby", st, n, groups, dist, mode, median_ms(f)))
             print(f"n={n:,} groups={groups:,} {dist} ({true_groups:,} used) done", flush=True)
             del kd, cpu
     del vd, v_pin, k_pin
@@ -97,16 +99,17 @@ def bench_size(n, rows):
 
 
 def print_rows(rows):
-    d = {(e, n, g, dist, m): ms for e, n, g, dist, m, ms in rows}
-    cols = [("pandas", "cpu"), ("polars", "cpu"), ("duckdb", "cpu")] + \
-           [("hash_groupby", m) for m in GPU_MODES]
+    d = {r[:-1]: r[-1] for r in rows}
+    cols = [("pandas", "-", "cpu"), ("polars", "-", "cpu"), ("duckdb", "-", "cpu")] + \
+           [("hash_groupby", st, m) for st in STRATEGIES for m in GPU_MODES]
     for n in (10_000_000, 100_000_000):
         print(f"\nn = {n:,}  (median ms)")
-        print(f"{'groups':>9} {'dist':>8}" + "".join(f"{e[:6] + '/' + m[:8]:>17}" for e, m in cols))
-        for g in sorted({k[2] for k in d if k[1] == n}):
+        print(f"{'groups':>9} {'dist':>8}" +
+              "".join(f"{(e if st == '-' else st)[:6] + '/' + m[:8]:>16}" for e, st, m in cols))
+        for g in sorted({k[3] for k in d if k[2] == n}):
             for dist in DISTS:
-                print(f"{g:>9,} {dist:>8}" +
-                      "".join(f"{d.get((e, n, g, dist, m), float('nan')):>17.2f}" for e, m in cols))
+                print(f"{g:>9,} {dist:>8}" + "".join(
+                    f"{d.get((e, st, n, g, dist, m), float('nan')):>16.2f}" for e, st, m in cols))
 
 
 def main():
@@ -116,8 +119,8 @@ def main():
     OUT.parent.mkdir(exist_ok=True)
     with OUT.open("w", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["engine", "n", "groups", "dist", "mode", "median_ms"])
-        w.writerows((e, n, g, dist, m, f"{ms:.3f}") for e, n, g, dist, m, ms in rows)
+        w.writerow(["engine", "strategy", "n", "groups", "dist", "mode", "median_ms"])
+        w.writerows((*r[:-1], f"{r[-1]:.3f}") for r in rows)
     print_rows(rows)
 
 
