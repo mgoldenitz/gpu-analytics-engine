@@ -6,7 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A GPU analytics engine: hand-written CUDA kernels (filter, hash group-by, hash join as a stretch goal) run through CuPy `RawKernel`, benchmarked against pandas, Polars and DuckDB. Target hardware is an RTX 5060 (sm_120) on Windows 11. Read `PROJECT_NOTES.md` for scope, stop rule, datasets and reference repos before starting new work.
 
-The project is at its start. Only `check_gpu.py` exists as code. No package layout, tests or benchmarks are written yet.
+Layout:
+
+- `engine/`: the kernels. `filter.py` (flag, scan, scatter; `scan="own"` or `"cub"`) and `scan.py` (own Blelloch exclusive scan).
+- `tests/`: pytest checks of each kernel against pandas or NumPy.
+- `benchmarks/`: `bench_filter.py` (timing runs), `datagen.py` (seeded data in memory), `summary.py` (prints the summary from the CSV), and `results/` (CSV output).
+- `docs/`: `progress.md`, `decisions.md`, `known-issues.md`.
 
 ## Rules
 

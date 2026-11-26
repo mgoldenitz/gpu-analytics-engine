@@ -7,4 +7,3 @@
 - The 8 GB GPU check uses estimates of bytes per row, not measured memory.
 - Many 1M-row wins are very close (about 0.4 ms for both sides at 1%).
 - `filter_noisy_run1.csv` was made with only 3.4 GB RAM free. Do not use it for the chart.
-- `CLAUDE.md` line 9 still says that only `check_gpu.py` exists.
