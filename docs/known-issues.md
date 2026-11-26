@@ -6,4 +6,6 @@
 - The time to fill the pinned buffer from pageable memory is not measured.
 - The 8 GB GPU check uses estimates of bytes per row, not measured memory.
 - Many 1M-row wins are very close (about 0.4 ms for both sides at 1%).
-- `filter_noisy_run1.csv` was made with only 3.4 GB RAM free. Do not use it for the chart.
+- `filter_noisy_run1.csv` was made with only 3.4 GB RAM free. Do not use it for the chart.- Group-by with 1 or 10 groups: all threads atomicAdd to the same few slots, so they run one after another. Not benchmarked yet. A fix is per-block pre-aggregation in shared memory.
+- Group-by needs the caller to give expected_groups. Too low gives an error, too high wastes memory.
+- Group-by output is in slot (hash) order, not key order.
