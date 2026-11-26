@@ -11,9 +11,11 @@
 - Results in `benchmarks/results/filter.csv` (clean run, 5.8 GB RAM free) and `filter_noisy_run1.csv` (old run).
 - Pinned: GPU end to end beats pandas and DuckDB from 1M rows, and Polars at 10, 50 and 90% selectivity.
 - `engine/groupby.py`: hash group-by, SUM (int64) and COUNT per int32 key. Linear probing, atomicCAS, compact with own scan. 42 tests vs pandas. memcheck 0 errors, racecheck 0 hazards.
+- 2026-11-26: `benchmarks/bench_groupby.py` writes `results/groupby.csv` (1M to 100M rows; 10, 1K, 1M groups; uniform, Zipf). Every engine is checked against pandas first. 5.7 GB RAM free.
+- Group-by e2e pinned beats Polars at 1K and 1M groups at every size (about 10x at 1M groups, 100M rows). It loses at 10 groups at every size (123 vs 89 ms at 100M).
 
 ## Next
 
 - Crossover chart from `filter.csv`.
-- Benchmark the group-by (1, 10, 1K, 1M groups; uniform and Zipf).
+- Group-by team fix: add up each block in shared memory first, then one global atomic per key per block. Then rerun `bench_groupby`.
 - README: where and why the GPU wins or loses.

@@ -16,3 +16,6 @@
 - Sums are unsigned 64-bit atomics (no signed 64-bit atomicAdd). Values are sign-extended, so two's complement gives the right signed result.
 - Counts are int32 in the table (at most n < 2^31) and int64 in the output.
 - Overflow sets a flag and the wrapper raises. No resize, no silent wrong result.
+- Group-by benchmark: expected_groups = the true number of distinct keys (Zipf leaves some keys unused). Keys are random distinct values in [0, 2^31 - 1), not 0..g-1.
+- Polars casts values to Int64 before sum, because Polars sums Int32 as Int32 and overflows. DuckDB uses `SUM(v)::BIGINT` (its SUM gives HUGEINT). pandas uses `sort=False`, as there is no ORDER BY.
+- `pinned_empty` takes a dtype now, for the int64 output columns.

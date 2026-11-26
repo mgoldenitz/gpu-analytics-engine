@@ -58,9 +58,10 @@ def cpu_engines(x):
     }
 
 
-def pinned_empty(n):
-    """A numpy int32 array in page-locked host memory (the array keeps the buffer alive)."""
-    return np.frombuffer(cp.cuda.alloc_pinned_memory(max(n, 1) * 4), np.int32, n)
+def pinned_empty(n, dtype=np.int32):
+    """A numpy array in page-locked host memory (the array keeps the buffer alive)."""
+    dtype = np.dtype(dtype)
+    return np.frombuffer(cp.cuda.alloc_pinned_memory(max(n, 1) * dtype.itemsize), dtype, n)
 
 
 def to_host_pinned(d, out_pin):
