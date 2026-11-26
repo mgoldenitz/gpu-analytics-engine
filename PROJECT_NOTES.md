@@ -20,8 +20,8 @@ A council review ranked this first of three CUDA projects (analytics engine, Mon
 3. Repo here; data in C:\data\gpu-analytics-engine (outside OneDrive).
 4. Python 3.14 venv:
    ```
-   py -3.14 -m venv .venv
-   .venv\Scripts\Activate.ps1
+   py -3.14 -m venv C:\venvs\gpu-analytics-engine
+   C:\venvs\gpu-analytics-engine\Scripts\Activate.ps1
    pip install cupy-cuda13x numpy pandas polars duckdb pyarrow pytest matplotlib
    ```
 5. Run check_gpu.py (CuPy RawKernel add-one test) first. It must print the RTX 5060 and True before anything else.

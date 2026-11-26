@@ -23,13 +23,13 @@ The project is at its start. Only `check_gpu.py` exists as code. No package layo
 Run from the project root in PowerShell.
 
 ```
-.venv\Scripts\Activate.ps1
+C:\venvs\gpu-analytics-engine\Scripts\Activate.ps1
 python check_gpu.py        # must print the GPU name, sm_120 and True before any other work
 pytest                     # all tests
 pytest path\to\test_file.py::test_name   # one test
 ```
 
-Installed in `.venv`: cupy-cuda13x 14.2.0, numpy, pandas, polars, duckdb, pyarrow, pytest, matplotlib. The venv is Python 3.14.7.
+The venv is at `C:\venvs\gpu-analytics-engine`, outside OneDrive. Installed: cupy-cuda13x 14.2.0, numpy, pandas, polars, duckdb, pyarrow, pytest, matplotlib. The venv is Python 3.14.7.
 
 TPC-H data comes from DuckDB: `CALL dbgen(sf=1)` (about 6M lineitem rows). Load only the columns a query needs.
 
