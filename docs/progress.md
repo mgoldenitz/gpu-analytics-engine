@@ -27,7 +27,12 @@
 - 2026-11-26: README.md and MIT LICENSE added. Both sweeps rerun in Best performance on AC (11.4 GB RAM free), commit e95f180. Polars now wins the filter end to end from 10M rows; group-by results hold.
 - /reflect: 3 new rules in CLAUDE.md (power mode and busy-program check, CPU-use command, check chart titles and README after a sweep).
 
+- 2026-11-26: found that Balanced mode ran the CPU at about 800 to 900 MHz and made Polars up to 2x slower. Both sweeps rerun in Best performance on AC; the Balanced CSVs are in git history.
+- Stress tests: Polars 1K uniform 100M rerun 3x (114 to 545 ms, two modes); pinned fill 21.2 ms at 100M; first group-by call 3.7 s (cold start); 200M check used 3.17 GiB of GPU memory.
+- README rewritten with the Best performance numbers; two stale plot.py titles fixed (commit 03117d0). known-issues updated to the new CSVs (commit 02bf138).
+- 2026-11-27 (Best performance on AC, 10.9 GB RAM free): reran global 10M 1K uniform 3x. kernel_only 2.00 ms, e2e_pinned 5.26 ms (median run) replace the 8.29 / 5.54 ms outlier in `groupby.csv`. Charts use 100M only, so no PNG changed.
+- CLAUDE.md: new rule, check power mode and 5% CPU per process before any benchmark run, and record the power mode.
+
 ## Next
 
-- Rewrite README.md with the new CSVs, fix the two stale plot.py titles, then push.
 - Choose the strategy automatically from expected_groups, or keep it a caller option.

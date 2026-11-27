@@ -74,9 +74,9 @@ hash_groupby,block,10000000,10,zipf,e2e_pinned,5.121
 pandas,-,10000000,1000,uniform,cpu,159.278
 polars,-,10000000,1000,uniform,cpu,95.975
 duckdb,-,10000000,1000,uniform,cpu,31.324
-hash_groupby,global,10000000,1000,uniform,kernel_only,8.295
+hash_groupby,global,10000000,1000,uniform,kernel_only,2.00
 hash_groupby,global,10000000,1000,uniform,e2e_pageable,10.789
-hash_groupby,global,10000000,1000,uniform,e2e_pinned,5.545
+hash_groupby,global,10000000,1000,uniform,e2e_pinned,5.26
 hash_groupby,block,10000000,1000,uniform,kernel_only,1.579
 hash_groupby,block,10000000,1000,uniform,e2e_pageable,8.453
 hash_groupby,block,10000000,1000,uniform,e2e_pinned,4.925
