@@ -2,7 +2,7 @@
 
 Hand-written CUDA filter and hash group-by kernels in CuPy RawKernel, benchmarked against pandas, Polars and DuckDB on an RTX 5060 Laptop GPU.
 
-- Filter, 100M rows, 10% selectivity: 29.5 ms on the GPU with pinned memory, against 48.6 ms for Polars.
+- Filter, 100M rows, 10% selectivity: 29.5 ms on the GPU with pinned memory end to end, including the copies, against 48.6 ms for Polars.
 - Group-by, 100M rows, 1M groups: 119.3 ms on the GPU (block strategy, pinned), against 1,147.4 ms for Polars.
 - Group-by, 100M rows, 10 groups: the block kernel takes 12.1 ms and the global kernel takes 89.2 ms (7.39x).
 
@@ -40,7 +40,7 @@ The global strategy loses to Polars at 10 groups: 124.6 ms (pinned) against 88.4
 
 ![Speedup of block over global](docs/figures/groupby_block_speedup.png)
 
-These are kernel-only times at 100M rows. The block strategy is 7.39x faster than global at 10 groups with uniform keys and 6.45x faster with Zipf keys. At 1K groups it is 1.50x (uniform) and 1.81x (Zipf) faster. At 1M uniform groups it is 5% slower (87.7 ms against 83.0 ms). Most of those rows do not find a place in the shared table and go to the global table anyway. At 1M Zipf groups the common keys stay in the shared table, so block is 3.11x faster.
+These are kernel-only times at 100M rows. The block strategy is 7.39x faster than global at 10 groups with uniform keys and 6.45x faster with Zipf keys. At 1K groups it is 1.50x (uniform) and 1.81x (Zipf) faster. At 1M uniform groups it is about 6% slower (87.7 ms against 83.0 ms). Most of those rows do not find a place in the shared table and go to the global table anyway. At 1M Zipf groups the common keys stay in the shared table, so block is 3.11x faster.
 
 ## What is inside
 
@@ -91,7 +91,7 @@ The kernels are in `engine/`. Each file has one job.
 
 ## How to run
 
-Run from the project root in PowerShell. You need an NVIDIA GPU and driver that support CUDA 13.
+Run from the project root in PowerShell. You need an NVIDIA GPU and a driver that supports CUDA 13.
 
 ```
 python -m venv C:\venvs\gpu-analytics-engine
@@ -105,7 +105,7 @@ python -m benchmarks.plot
 ```
 
 - `check_gpu.py` must print the GPU name, the compute capability (for example `sm_120`) and `True` before any other work.
-- `pytest tests\test_filter.py::test_filter_matches_pandas` runs one test.
+- `pytest tests\test_filter.py::test_filter_matches_pandas` runs one test function (60 cases).
 - The benchmarks write `benchmarks/results/filter.csv` and `groupby.csv`. `plot.py` reads them and writes the four charts to `docs/figures/`. The chart titles are fixed text, so check them after a new run.
 
 ## References
@@ -116,3 +116,7 @@ I read and cited these. The code in this repo is my own.
 - [NVIDIA/cccl, CUB device scan (`cub/cub/device/device_scan.cuh`)](https://github.com/NVIDIA/cccl/blob/main/cub/cub/device/device_scan.cuh)
 - [NVIDIA/cuCollections, `static_map`](https://github.com/NVIDIA/cuCollections/blob/dev/include/cuco/static_map.cuh), [linear probing (`probing_scheme.cuh`)](https://github.com/NVIDIA/cuCollections/blob/dev/include/cuco/probing_scheme.cuh) and [shared-memory example](https://github.com/NVIDIA/cuCollections/blob/dev/examples/static_set/shared_memory_example.cu)
 - [GPU Gems 3, chapter 39: Parallel Prefix Sum (Scan) with CUDA](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda) (Harris, Sengupta, Owens)
+
+## License
+
+MIT. See [LICENSE](LICENSE).
