@@ -8,7 +8,7 @@ Hand-written CUDA filter and hash group-by kernels in CuPy RawKernel, benchmarke
 
 ## Results
 
-All numbers are median times in milliseconds from `benchmarks/results/filter.csv` and `benchmarks/results/groupby.csv`. "Pinned" and "pageable" times include the copy to the GPU and back. "Kernel only" times start and end with the data already on the GPU (see Benchmark method).
+All numbers are median times in milliseconds from `benchmarks/results/filter.csv` and `benchmarks/results/groupby.csv`. "Pinned" and "pageable" times include the copy to the GPU and back. "Kernel only" times start and end with the data already on the GPU (see Benchmark method). GPU filter numbers use my own scan (scan="own") unless stated.
 
 ### Filter: Polars wins end to end from 10M rows
 
@@ -48,7 +48,7 @@ These are kernel-only times at 100M rows. The block strategy is 7.21x faster tha
 
 The kernels are in `engine/`. Each file has one job.
 
-- `engine/filter.py`: `filter_less_than(x, threshold, scan="own")`. Step 1 (flag) writes 1 for each row that passes and 0 for each row that does not. Step 2 is an exclusive prefix scan of the flags, which gives each passing row its position in the output. Step 3 (scatter) writes each passing row to that position, so the output stays in input order. With `scan="own"`, step 2 uses my own scan. With `scan="cub"`, it uses `cp.cumsum`, which runs NVIDIA CUB. The cumsum is inclusive, so the scatter subtracts 1 and no extra pass is needed.
+- `engine/filter.py`: `filter_less_than(x, threshold, scan="own")`. Step 1 (flag) writes 1 for each row that passes and 0 for each row that does not. Step 2 is an exclusive prefix scan of the flags, which gives each passing row its position in the output. Step 3 (scatter) writes each passing row to that position, so the output stays in input order. With `scan="own"`, step 2 uses my own scan. With `scan="cub"`, it uses `cp.cumsum`, which runs NVIDIA CUB. The cumsum is inclusive, so the scatter subtracts 1 and no extra pass is needed. At 100M rows and 10% selectivity, CUB's scan makes the filter 1.5 ms faster than my own scan with kernel only (11.3 ms against 12.8 ms) and 1.3 ms faster end to end with pinned memory (28.3 ms against 29.7 ms).
 - `engine/scan.py`: my own work-efficient (Blelloch) exclusive scan, as in GPU Gems 3, chapter 39. Each block of 256 threads scans 512 elements in shared memory. The block totals are then scanned with the same function (recursion) and added back to each block. Bank-conflict avoidance is left out to keep the code readable.
 - `engine/groupby.py`: `group_by_sum_count(keys, values, expected_groups, strategy="global")`. It is a hash table with open addressing and linear probing, as in cuCollections `static_map`. The hash is the 32-bit MurmurHash3 finalizer (fmix32). The table size is the next power of two at or above 2 x `expected_groups`, so the load factor is at most 0.5. Sums are 64-bit, so int32 values cannot overflow.
   - `strategy="global"`: one thread per row, and one atomic update of the global table per row.
