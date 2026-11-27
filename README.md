@@ -78,7 +78,7 @@ The kernels are in `engine/`. Each file has one job.
 - Before each full run I checked free RAM with `Get-CimInstance Win32_OperatingSystem`, and stopped if it was below 5 GB. Free RAM was 11.4 GB for both runs.
 - Known noise:
   - Polars at 1K uniform groups and 100M rows has two modes. Three runs gave 114.2, 137.4 and 544.7 ms, and the CSV has 344.3 ms. The cause is unknown.
-  - At 1M rows the GPU pinned and Polars filter times differ by at most 0.12 ms.
+  - At 1M rows the GPU wins against Polars by 0.03 ms (10%) and 0.12 ms (1%). Both gaps are small, so treat the 1M wins as close.
   - `benchmarks/results/filter_noisy_run1.csv` is an old run with only 3.4 GB RAM free and is not used in the charts.
 
 ## Limits
