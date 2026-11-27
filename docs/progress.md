@@ -32,6 +32,8 @@
 - README rewritten with the Best performance numbers; two stale plot.py titles fixed (commit 03117d0). known-issues updated to the new CSVs (commit 02bf138).
 - 2026-11-27 (Best performance on AC, 10.9 GB RAM free): reran global 10M 1K uniform 3x. kernel_only 2.00 ms, e2e_pinned 5.26 ms (median run) replace the 8.29 / 5.54 ms outlier in `groupby.csv`. Charts use 100M only, so no PNG changed.
 - CLAUDE.md: new rule, check power mode and 5% CPU per process before any benchmark run, and record the power mode.
+- 2026-11-27: charts use pandas #0072B2, Polars #E69F00, DuckDB red #D62728, GPU #76b900. GPU lines solid 2.5, CPU dashed 1.5; hollow markers for GPU pageable and global. README References adds NVIDIA/cudf and anilshanbhag/crystal.
+- /reflect: 2 new chart rules in CLAUDE.md (update decisions.md with style changes, check same-colour lines still differ); PROJECT_NOTES cudf path now NVIDIA/cudf.
 
 ## Next
 

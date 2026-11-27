@@ -21,6 +21,8 @@ Layout:
 - Before any benchmark run, check free RAM (Get-CimInstance Win32_OperatingSystem), that Windows is in Best performance on AC power (ActiveOverlayAcPowerScheme = ded574b5-45a0-4f42-8737-46345c09c238 under HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes), and that no other process uses more than 5% CPU (for example a video render). If RAM is below 5 GB or a check fails, stop and ask the owner. Record the power mode in the run notes.
 - To check CPU use: (Get-Counter '\Process(*)\% Processor Time' -SampleInterval 3).CounterSamples, divide by 20 (logical processors), and ignore Idle, _Total and the WMI host. The limit is 5% of the whole CPU.
 - After a new sweep, run plot.py and compare each fixed chart title and each README number with the new CSV.
+- When you change chart colours, markers or line styles in plot.py, update the Charts line in docs/decisions.md in the same commit.
+- After a chart style change, view each PNG and check that every two lines with the same colour still differ by line style or marker.
 - Crossover point = the smallest n from which the GPU wins at that size and at all larger sizes, not the first n where it wins once.
 - Explain every kernel line by line before moving on.
 - Write our own kernels. Read and cite the reference repos in `PROJECT_NOTES.md` (cuda-samples, CCCL/CUB, cuCollections, cudf), do not copy them. Before you write a cited path, make sure that it exists: `gh api repos/<owner>/<repo>/contents/<path>`.

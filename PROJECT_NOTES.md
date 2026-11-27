@@ -50,7 +50,7 @@ Superpowers (brainstorming, writing-plans, test-driven-development, systematic-d
 - NVIDIA/cuda-samples: reductions, prefix scan, stream compaction (the filter kernel).
 - NVIDIA/cccl (CUB, Thrust): device-wide reduce and scan; a "my kernel vs NVIDIA's" baseline.
 - NVIDIA/cuCollections: GPU hash maps and collision handling for group-by and join.
-- rapidsai/cudf: production group-by and join code, read after yours works.
+- NVIDIA/cudf (was rapidsai/cudf): production group-by and join code, read after yours works.
 - anilshanbhag/crystal: SIGMOD 2020 GPU vs CPU database analytics engine and paper. Not verified; confirm the repo exists.
 
 ## Known facts checked
