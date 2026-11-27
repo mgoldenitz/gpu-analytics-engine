@@ -1,8 +1,8 @@
 # Known issues
 
-- Polars beats GPU end to end at 1% selectivity from 50M rows, also with pinned memory. The copy overhead (14.9 ms at 100M rows: filter.csv, 1%, e2e_pinned minus kernel_only) costs more than the Polars filter (12 ms).
-- Pageable end to end never beats Polars. The copies take about 90% of the time.
-- Some benchmark points are still not consistent, for example `cupy_builtin` kernel_only 13.77 ms at 10M and 90%, but about 1 ms at other selectivities.
+- Polars beats GPU end to end at 1% and 10% selectivity from 10M rows, also with pinned memory. At 1% and 100M rows the copy overhead (16.5 ms: e2e_pinned minus kernel_only) costs more than the Polars filter (12.3 ms).
+- Pageable end to end never beats Polars. At 100M rows and 10%, the copies take about 80% of the pageable time.
+- The old `cupy_builtin` kernel_only outlier (13.77 ms at 10M and 90%) came from the Balanced-mode run. The Best performance run gives 1.18 ms.
 - The time to fill the pinned buffer from pageable memory is not measured.
 - The 8 GB GPU check uses estimates of bytes per row, not measured memory.
 - Many 1M-row wins are very close (about 0.4 ms for both sides at 1%).

@@ -18,7 +18,9 @@ Layout:
 - Data lives in `C:\data\gpu-analytics-engine` and never in the repo. Do not write `.parquet` or generated datasets inside the project folder (it is in OneDrive).
 - Every kernel gets a pytest that checks its results against pandas. Write the test first and run it once before the kernel exists. It must fail.
 - Benchmarks report kernel_only, e2e_pageable and e2e_pinned times, against pandas, Polars and DuckDB. Every engine must sum int32 as int64: Polars needs `.cast(pl.Int64)`, DuckDB needs `::BIGINT`.
-- Before a full benchmark run, check free RAM (Get-CimInstance Win32_OperatingSystem). If it is below 5 GB, stop and ask the owner to close programs.
+- Before a full benchmark run, check free RAM (Get-CimInstance Win32_OperatingSystem), that the power overlay is Best performance on AC (ActiveOverlayAcPowerScheme = ded574b5-45a0-4f42-8737-46345c09c238 under HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes), and that no other program (for example a video render) is busy. If RAM is below 5 GB or a check fails, stop and ask the owner.
+- To check CPU use: (Get-Counter '\Process(*)\% Processor Time' -SampleInterval 3).CounterSamples, divide by 20 (logical processors), and ignore Idle, _Total and the WMI host. The limit is 5% of the whole CPU.
+- After a new sweep, run plot.py and compare each fixed chart title and each README number with the new CSV.
 - Crossover point = the smallest n from which the GPU wins at that size and at all larger sizes, not the first n where it wins once.
 - Explain every kernel line by line before moving on.
 - Write our own kernels. Read and cite the reference repos in `PROJECT_NOTES.md` (cuda-samples, CCCL/CUB, cuCollections, cudf), do not copy them. Before you write a cited path, make sure that it exists: `gh api repos/<owner>/<repo>/contents/<path>`.

@@ -24,7 +24,10 @@
 
 - 2026-11-26: fixed all 5 code-review findings in `engine/` (input checks, GPU memory check, constants set once, scan overflow check), each with a test that failed first. 163 tests pass; memcheck 0 errors.
 
+- 2026-11-26: README.md and MIT LICENSE added. Both sweeps rerun in Best performance on AC (11.4 GB RAM free), commit e95f180. Polars now wins the filter end to end from 10M rows; group-by results hold.
+- /reflect: 3 new rules in CLAUDE.md (power mode and busy-program check, CPU-use command, check chart titles and README after a sweep).
+
 ## Next
 
+- Rewrite README.md with the new CSVs, fix the two stale plot.py titles, then push.
 - Choose the strategy automatically from expected_groups, or keep it a caller option.
-- README: where and why the GPU wins or loses.
