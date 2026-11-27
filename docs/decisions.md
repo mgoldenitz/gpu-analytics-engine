@@ -26,4 +26,5 @@
 - One `__device__ add_global` for both strategies and for the flush, so there is only one global probe loop.
 - Input checks (code review, 2026-11-26): `filter_less_than` raises TypeError for a non-integer threshold and ValueError outside int32; `group_by_sum_count` takes NumPy ints; it checks free GPU memory (24 bytes per slot) and raises MemoryError before it allocates; `ROWS_PER_BLOCK` and `ELEMS` are set once in Python and go into the CUDA source as `#define`.
 - Published benchmarks run in Windows Best performance on AC. In Balanced mode the CPU ran at about 800 to 900 MHz and Polars was up to 2x slower. The Balanced CSVs are in git history.
+- The group-by sweep stops at 100M rows to keep the CPU engine runs short. A 200M check used 3.17 GiB of GPU memory, so GPU memory is not the limit.
 - `exclusive_scan` checks that the int64 total fits int32 and raises OverflowError. The filter and group-by call `_scan` (no check), because 0/1 flags total at most n and the check costs a full pass over the data.

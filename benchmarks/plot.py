@@ -96,7 +96,7 @@ def filter_crossover(f):
     ax.set_xticks(sizes)
     ax.set_xlim(right=sizes[-1] * 3.2)  # room for the end labels
     save(fig, "filter_crossover.png", "Filter, 10% selectivity: GPU beats pandas and DuckDB at "
-         "every size. Pinned beats Polars from 10M rows; pageable beats it only at 10M",
+         "every size. Pinned beats Polars only at 1M rows; pageable never does",
          (ax, ends))
 
 
@@ -165,7 +165,7 @@ def groupby_block_speedup(g):
     ax.grid(axis="x", visible=False)
     ax.legend(loc="upper right", fontsize=8)
     save(fig, "groupby_block_speedup.png", "Group-by, 100M rows: block is 6-7x faster at 10 "
-         "groups, but about 6% slower than global at 1M uniform groups")
+         "groups, but about 5% slower than global at 1M uniform groups")
 
 
 def main():
