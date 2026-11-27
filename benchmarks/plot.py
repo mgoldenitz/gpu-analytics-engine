@@ -16,7 +16,7 @@ FIGS = Path(__file__).parent.parent / "docs" / "figures"
 
 # One color per engine in every chart: pandas blue and Polars orange (colorblind-safe pair),
 # DuckDB red, GPU in NVIDIA green. Each engine also gets its own marker shape.
-# All GPU lines share one color; dashed = GPU pageable or GPU global.
+# Line style: GPU lines solid and 2.5 wide, CPU engine lines dashed and 1.5 wide.
 COLOR = {"pandas": "#0072B2", "polars": "#E69F00", "duckdb": "#D62728", "gpu": "#76b900"}
 MARKER = {"pandas": "s", "polars": "^", "duckdb": "D", "gpu": "o"}
 COPY_GRAY = "#d4d4d4"  # not an engine: the copy part of a GPU bar, light grey, so it does not look like an engine
@@ -47,9 +47,10 @@ def plain_fmt(x, _):
     return f"{x:,.0f}" if x >= 1 else f"{x:g}"
 
 
-def line(ax, xs, ys, key, label, dashed=False):
-    """2px line with markers. Returns its end point and label for end_labels()."""
-    ax.plot(xs, ys, color=COLOR[key], lw=2, ls="--" if dashed else "-", marker=MARKER[key], ms=5,
+def line(ax, xs, ys, key, label):
+    """Line with markers: GPU solid 2.5, CPU dashed 1.5. Returns its end point and label for end_labels()."""
+    gpu = key == "gpu"
+    ax.plot(xs, ys, color=COLOR[key], lw=2.5 if gpu else 1.5, ls="-" if gpu else "--", marker=MARKER[key], ms=5,
             mec="white", mew=1)
     return xs[-1], ys[-1], label
 
@@ -86,9 +87,9 @@ def filter_crossover(f):
     fig, ax = plt.subplots(figsize=(8, 4.6))
     ends = [line(ax, sizes, [f[(e, str(n), "10", "cpu")] for n in sizes], e, LABEL[e])
             for e in ("pandas", "polars", "duckdb")]
-    for mode, dashed in (("e2e_pageable", True), ("e2e_pinned", False)):
+    for mode in ("e2e_pageable", "e2e_pinned"):
         ys = [f[("filter_own", str(n), "10", mode)] for n in sizes]
-        ends.append(line(ax, sizes, ys, "gpu", f"GPU filter {mode[4:]}", dashed))
+        ends.append(line(ax, sizes, ys, "gpu", f"GPU filter {mode[4:]}"))
     ax.set(xscale="log", yscale="log", xlabel="Rows (log scale)",
            ylabel="Median time, ms (log scale)")
     ax.xaxis.set_major_formatter(FuncFormatter(rows_fmt))
@@ -131,9 +132,9 @@ def groupby_by_groups(g):
     fig, ax = plt.subplots(figsize=(8, 4.6))
     ends = [line(ax, groups, [g[(e, "-", n, str(k), "uniform", "cpu")] for k in groups],
                  e, LABEL[e]) for e in ("pandas", "polars", "duckdb")]
-    for st, dashed in (("global", True), ("block", False)):
+    for st in ("global", "block"):
         ys = [g[("hash_groupby", st, n, str(k), "uniform", "e2e_pinned")] for k in groups]
-        ends.append(line(ax, groups, ys, "gpu", f"GPU {st} (pinned)", dashed))
+        ends.append(line(ax, groups, ys, "gpu", f"GPU {st} (pinned)"))
     ax.set(xscale="log", yscale="log", xlabel="Number of groups (log scale)",
            ylabel="Median time, ms (log scale)")
     ax.set_xticks(groups)
