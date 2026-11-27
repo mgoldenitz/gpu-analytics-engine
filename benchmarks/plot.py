@@ -15,11 +15,11 @@ RESULTS = Path(__file__).parent / "results"
 FIGS = Path(__file__).parent.parent / "docs" / "figures"
 
 # One color per engine in every chart: pandas blue and Polars orange (colorblind-safe pair),
-# DuckDB dark grey, GPU in NVIDIA green. Each engine also gets its own marker shape.
+# DuckDB red, GPU in NVIDIA green. Each engine also gets its own marker shape.
 # All GPU lines share one color; dashed = GPU pageable or GPU global.
-COLOR = {"pandas": "#0072B2", "polars": "#E69F00", "duckdb": "#555555", "gpu": "#76b900"}
+COLOR = {"pandas": "#0072B2", "polars": "#E69F00", "duckdb": "#D62728", "gpu": "#76b900"}
 MARKER = {"pandas": "s", "polars": "^", "duckdb": "D", "gpu": "o"}
-COPY_GRAY = "#d4d4d4"  # not an engine: the copy part of a GPU bar, much lighter than DuckDB grey
+COPY_GRAY = "#d4d4d4"  # not an engine: the copy part of a GPU bar, light grey, so it does not look like an engine
 TEXT, TEXT2, GRID = "#191919", "#666666", "#e5e5e5"
 LABEL = {"pandas": "pandas", "polars": "Polars", "duckdb": "DuckDB"}
 LABEL_GAP_PT = 12  # smallest vertical distance between two end labels
