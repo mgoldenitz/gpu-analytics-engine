@@ -17,6 +17,7 @@ FIGS = Path(__file__).parent.parent / "docs" / "figures"
 # One color per engine in every chart: pandas blue and Polars orange (colorblind-safe pair),
 # DuckDB red, GPU in NVIDIA green. Each engine also gets its own marker shape.
 # Line style: GPU lines solid and 2.5 wide, CPU engine lines dashed and 1.5 wide.
+# GPU markers: filled = main GPU path (pinned, block), hollow = alternate GPU path (pageable, global).
 COLOR = {"pandas": "#0072B2", "polars": "#E69F00", "duckdb": "#D62728", "gpu": "#76b900"}
 MARKER = {"pandas": "s", "polars": "^", "duckdb": "D", "gpu": "o"}
 COPY_GRAY = "#d4d4d4"  # not an engine: the copy part of a GPU bar, light grey, so it does not look like an engine
@@ -47,11 +48,13 @@ def plain_fmt(x, _):
     return f"{x:,.0f}" if x >= 1 else f"{x:g}"
 
 
-def line(ax, xs, ys, key, label):
-    """Line with markers: GPU solid 2.5, CPU dashed 1.5. Returns its end point and label for end_labels()."""
+def line(ax, xs, ys, key, label, hollow=False):
+    """Line with markers: GPU solid 2.5, CPU dashed 1.5. hollow = white marker with a colored edge.
+    Returns its end point and label for end_labels()."""
     gpu = key == "gpu"
+    face, edge = ("white", COLOR[key]) if hollow else (COLOR[key], "white")
     ax.plot(xs, ys, color=COLOR[key], lw=2.5 if gpu else 1.5, ls="-" if gpu else "--", marker=MARKER[key], ms=5,
-            mec="white", mew=1)
+            mfc=face, mec=edge, mew=1.5 if hollow else 1)
     return xs[-1], ys[-1], label
 
 
@@ -89,7 +92,7 @@ def filter_crossover(f):
             for e in ("pandas", "polars", "duckdb")]
     for mode in ("e2e_pageable", "e2e_pinned"):
         ys = [f[("filter_own", str(n), "10", mode)] for n in sizes]
-        ends.append(line(ax, sizes, ys, "gpu", f"GPU filter {mode[4:]}"))
+        ends.append(line(ax, sizes, ys, "gpu", f"GPU filter {mode[4:]}", mode == "e2e_pageable"))
     ax.set(xscale="log", yscale="log", xlabel="Rows (log scale)",
            ylabel="Median time, ms (log scale)")
     ax.xaxis.set_major_formatter(FuncFormatter(rows_fmt))
@@ -134,7 +137,7 @@ def groupby_by_groups(g):
                  e, LABEL[e]) for e in ("pandas", "polars", "duckdb")]
     for st in ("global", "block"):
         ys = [g[("hash_groupby", st, n, str(k), "uniform", "e2e_pinned")] for k in groups]
-        ends.append(line(ax, groups, ys, "gpu", f"GPU {st} (pinned)"))
+        ends.append(line(ax, groups, ys, "gpu", f"GPU {st} (pinned)", st == "global"))
     ax.set(xscale="log", yscale="log", xlabel="Number of groups (log scale)",
            ylabel="Median time, ms (log scale)")
     ax.set_xticks(groups)
