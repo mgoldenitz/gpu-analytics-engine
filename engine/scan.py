@@ -76,12 +76,21 @@ _add_offsets = _module.get_function('add_offsets')
 def exclusive_scan(x):
     """Return out where out[i] = x[0] + ... + x[i-1], and out[0] = 0.
 
-    Sums are int32 with no overflow check: the caller keeps the total below 2^31.
-    The filter and group-by scan 0/1 flags, so their total is at most the row count.
+    Sums are int32. Raises OverflowError if the total of x is outside int32.
+    Limit: with negative values a partial sum can pass int32 while the total does not;
+    that case is not checked. Values >= 0 (such as 0/1 flags) are fully covered.
     """
     if not isinstance(x, cp.ndarray) or x.dtype != cp.int32 or x.ndim != 1:
         raise TypeError("x must be a 1-D cupy int32 array")
-    x = cp.ascontiguousarray(x)
+    total = int(x.sum(dtype=cp.int64))
+    if not -2**31 <= total < 2**31:
+        raise OverflowError(f"scan total {total:,} does not fit in int32")
+    return _scan(cp.ascontiguousarray(x))
+
+
+def _scan(x):
+    """exclusive_scan without the checks, for callers whose total is known to fit.
+    The filter and group-by scan 0/1 flags, so their total is at most the row count."""
     n = x.size
     out = cp.empty(n, dtype=cp.int32)
     if n == 0:
@@ -93,6 +102,6 @@ def exclusive_scan(x):
 
     if blocks > 1:
         # Step 2: scan the block totals with this same function (recursion).
-        block_offsets = exclusive_scan(block_sums)
+        block_offsets = _scan(block_sums)
         _add_offsets((blocks,), (THREADS,), (out, block_offsets, cp.int32(n)))
     return out

@@ -17,12 +17,13 @@ import operator
 
 import cupy as cp
 
-from engine.scan import exclusive_scan
+from engine.scan import _scan  # 0/1 flags: total <= n, so no int32 check (it costs a full pass)
 
 THREADS = 256
 EMPTY = -2**31  # INT_MIN marks an empty slot, so it cannot be a real key
 # Capacity stays at or below 2^30, inside int32 scan positions. The table uses 24 bytes
-# per slot, so the top of this range needs about 24 GB; CuPy raises OutOfMemoryError first.
+# per slot, so the top of this range needs about 24 GB; group_by_sum_count checks free
+# GPU memory first and raises MemoryError (about 2^27 groups fit on an 8 GB card).
 MAX_GROUPS = 2**29
 ROWS_PER_BLOCK = 4096  # 16 rows per thread, so a block can see more keys than SLOTS
 
@@ -168,6 +169,12 @@ def group_by_sum_count(keys, values, expected_groups, strategy="global"):
         raise ValueError("keys must not contain INT_MIN (it marks empty slots)")
 
     cap = 1 << (2 * expected_groups - 1).bit_length()
+    # 24 bytes per slot: table keys, sums, counts (16) plus scan flags and positions (8).
+    need = cap * 24
+    free = cp.cuda.Device().mem_info[0] + cp.get_default_memory_pool().free_bytes()
+    if need > free:
+        raise MemoryError(f"expected_groups={expected_groups:,} needs {need / 2**30:.1f} GB "
+                          f"of GPU memory for the table; {free / 2**30:.1f} GB is free")
     t_keys = cp.full(cap, EMPTY, dtype=cp.int32)
     t_sums = cp.zeros(cap, dtype=cp.uint64)
     t_counts = cp.zeros(cap, dtype=cp.int32)
@@ -184,7 +191,7 @@ def group_by_sum_count(keys, values, expected_groups, strategy="global"):
     # Steps 2-4: compact the used slots, as in engine/filter.py with scan="own".
     flags = cp.empty(cap, dtype=cp.int32)
     _flag_used(_grid(cap), (THREADS,), (t_keys, flags, cp.int32(cap)))
-    pos = exclusive_scan(flags)
+    pos = _scan(flags)
     count = int(pos[-1] + flags[-1])
 
     out_keys = cp.empty(count, dtype=cp.int32)

@@ -22,6 +22,8 @@
 - Reran suspect CPU points 3x each: none changed more than 20%, so `groupby.csv` stays.
 - /reflect: 4 new rules in CLAUDE.md (int64 sums in every engine, check cited paths with gh api, run new tests red first, racecheck and synccheck for kernels with barriers).
 
+- 2026-11-26: fixed all 5 code-review findings in `engine/` (input checks, GPU memory check, constants set once, scan overflow check), each with a test that failed first. 163 tests pass; memcheck 0 errors.
+
 ## Next
 
 - Choose the strategy automatically from expected_groups, or keep it a caller option.

@@ -3,6 +3,7 @@ import cupy as cp
 import numpy as np
 import pytest
 
+from engine import scan
 from engine.scan import exclusive_scan
 
 
@@ -15,3 +16,15 @@ def test_exclusive_scan_matches_numpy(n):
 
     result = cp.asnumpy(exclusive_scan(cp.asarray(flags)))
     np.testing.assert_array_equal(result, expected)
+
+
+def test_total_above_int32_raises():
+    x = cp.full(3, 2**30, dtype=cp.int32)  # total 3 * 2^30 > 2^31 - 1
+    with pytest.raises(OverflowError):
+        exclusive_scan(x)
+
+
+def test_elems_set_once():
+    # The CUDA #define must come from the Python constant, so the launch grid and kernel agree.
+    assert scan._SOURCE.startswith(f"#define ELEMS {scan.ELEMS}\n")
+    assert scan._SOURCE.count("#define ELEMS") == 1

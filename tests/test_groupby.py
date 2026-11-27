@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from engine.groupby import group_by_sum_count
+from engine import groupby
+from engine.groupby import MAX_GROUPS, group_by_sum_count
 
 INT_MIN = np.iinfo(np.int32).min
 STRATEGIES = ["global", "block"]
@@ -78,3 +79,18 @@ def test_numpy_int_expected_groups_accepted():
     keys = cp.asarray([5, 5, 7], dtype=cp.int32)
     k, s, c = group_by_sum_count(keys, cp.ones(3, dtype=cp.int32), expected_groups=np.int64(2))
     assert sorted(cp.asnumpy(k).tolist()) == [5, 7]
+
+
+def test_table_too_big_for_gpu_raises():
+    # MAX_GROUPS needs a 2^30-slot table, about 24 GB. The error must say so before any allocation.
+    if cp.cuda.Device().mem_info[1] > 32 * 2**30:
+        pytest.skip("this GPU has room for the largest table")
+    one = cp.ones(1, dtype=cp.int32)
+    with pytest.raises(MemoryError, match="needs"):
+        group_by_sum_count(one, one, expected_groups=MAX_GROUPS)
+
+
+def test_rows_per_block_set_once():
+    # The CUDA #define must come from the Python constant, so the launch grid and kernel agree.
+    assert groupby._SOURCE.startswith(f"#define ROWS_PER_BLOCK {groupby.ROWS_PER_BLOCK}\n")
+    assert groupby._SOURCE.count("#define ROWS_PER_BLOCK") == 1

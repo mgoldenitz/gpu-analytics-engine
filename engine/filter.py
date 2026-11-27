@@ -3,7 +3,7 @@ import operator
 
 import cupy as cp
 
-from engine.scan import exclusive_scan
+from engine.scan import _scan  # 0/1 flags: total <= n, so no int32 check (it costs a full pass)
 
 THREADS = 256
 
@@ -48,7 +48,7 @@ def filter_less_than(x, threshold, scan="own"):
 
     # Step 2, prefix scan. int32 positions limit n to 2^31 - 1 rows; 200M rows fits.
     if scan == "own":
-        pos = exclusive_scan(flags)  # passing rows before i
+        pos = _scan(flags)  # passing rows before i
         shift = 0
         count = int(pos[-1] + flags[-1])
     else:

@@ -19,3 +19,5 @@
 - Group-by with 1M groups: the table is 2M slots x 16 bytes = 32 MB, about the size of the L2 cache, so the random atomics go to DRAM. That is why 1M groups is slower than 1K groups.
 - racecheck does not find races between shared atomics and plain shared reads. Test: with barrier 2 removed, the count was wrong (3947 of 4096) and racecheck still gave 0 hazards, also with `--racecheck-detect-level info`. The pandas tests are the real check for the block kernel.
 - Block strategy with many distinct keys per block (1M uniform groups): most rows miss the shared table and go to global. Measured: 87.7 vs 83.0 ms kernel_only at 100M (5.6% slower). At 10M it is 0.13 ms faster, which is noise. With 1M Zipf groups the hot keys hit the shared table, so block is 3x faster.
+- `exclusive_scan` checks only the total. With negative values a partial sum can pass int32 while the total fits; that is not checked.
+- The group-by memory check counts the table, flags and scan positions, not the output columns or the inputs. On an 8 GB card about 2^27 groups fit.
