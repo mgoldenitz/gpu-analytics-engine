@@ -1,4 +1,6 @@
 """Keep the int32 values below a threshold, on the GPU (stream compaction)."""
+import operator
+
 import cupy as cp
 
 from engine.scan import exclusive_scan
@@ -32,6 +34,9 @@ def filter_less_than(x, threshold, scan="own"):
         raise TypeError("x must be a 1-D cupy int32 array")
     if scan not in ("own", "cub"):
         raise ValueError('scan must be "own" or "cub"')
+    threshold = operator.index(threshold)  # TypeError for 2.5: cp.int32(2.5) would cut it to 2
+    if not -2**31 <= threshold < 2**31:
+        raise ValueError("threshold must fit in int32")
     x = cp.ascontiguousarray(x)
     n = x.size
     if n == 0:

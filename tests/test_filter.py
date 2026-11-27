@@ -24,3 +24,14 @@ def test_filter_matches_pandas(n, pct, scan):
 
     result = cp.asnumpy(filter_less_than(cp.asarray(values), threshold, scan=scan))
     np.testing.assert_array_equal(result, expected)
+
+
+@pytest.mark.parametrize("threshold, error", [(2.5, TypeError), (2**31, ValueError)])
+def test_bad_threshold_rejected(threshold, error):
+    with pytest.raises(error):
+        filter_less_than(cp.arange(4, dtype=cp.int32), threshold)
+
+
+def test_numpy_int_threshold_accepted():
+    result = filter_less_than(cp.arange(4, dtype=cp.int32), np.int64(2))
+    np.testing.assert_array_equal(cp.asnumpy(result), [0, 1])

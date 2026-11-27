@@ -72,3 +72,9 @@ def test_int_min_key_rejected():
     keys = cp.asarray([1, INT_MIN], dtype=cp.int32)
     with pytest.raises(ValueError):
         group_by_sum_count(keys, cp.ones(2, dtype=cp.int32), expected_groups=2)
+
+
+def test_numpy_int_expected_groups_accepted():
+    keys = cp.asarray([5, 5, 7], dtype=cp.int32)
+    k, s, c = group_by_sum_count(keys, cp.ones(3, dtype=cp.int32), expected_groups=np.int64(2))
+    assert sorted(cp.asnumpy(k).tolist()) == [5, 7]

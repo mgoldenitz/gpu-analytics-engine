@@ -13,15 +13,20 @@ CUDA C++ Programming Guide describes atomic functions on shared memory
 (section "Atomic Functions": they work on 32- and 64-bit words in global or
 shared memory, and are atomic only within the thread block for shared memory).
 """
+import operator
+
 import cupy as cp
 
 from engine.scan import exclusive_scan
 
 THREADS = 256
 EMPTY = -2**31  # INT_MIN marks an empty slot, so it cannot be a real key
-MAX_GROUPS = 2**29  # capacity stays at or below 2^30, inside int32 scan positions
+# Capacity stays at or below 2^30, inside int32 scan positions. The table uses 24 bytes
+# per slot, so the top of this range needs about 24 GB; CuPy raises OutOfMemoryError first.
+MAX_GROUPS = 2**29
+ROWS_PER_BLOCK = 4096  # 16 rows per thread, so a block can see more keys than SLOTS
 
-_SOURCE = r'''
+_SOURCE = f"#define ROWS_PER_BLOCK {ROWS_PER_BLOCK}\n" + r'''
 #define EMPTY (-2147483647 - 1)
 
 // MurmurHash3 fmix32: mixes all 32 bits, so near keys land far apart.
@@ -62,7 +67,6 @@ extern "C" __global__ void insert(const int* keys, const int* vals, int n,
 }
 
 #define SLOTS 1024           // shared table per block: 1024 * (4 + 8 + 4) bytes = 16 KB
-#define ROWS_PER_BLOCK 4096  // 16 rows per thread, so a block can see more keys than SLOTS
 #define SHARED_PROBES 32     // after this many taken slots, the row goes to global
 
 // Step 1, strategy="block": add up the block's rows in shared memory, then flush once per key.
@@ -129,7 +133,6 @@ extern "C" __global__ void scatter(const int* t_keys, const unsigned long long* 
 _module = cp.RawModule(code=_SOURCE)
 _insert = _module.get_function('insert')
 _insert_block = _module.get_function('insert_block')
-ROWS_PER_BLOCK = 4096  # same as the #define in _SOURCE
 _flag_used = _module.get_function('flag_used')
 _scatter = _module.get_function('scatter')
 
@@ -153,6 +156,7 @@ def group_by_sum_count(keys, values, expected_groups, strategy="global"):
             raise TypeError(f"{name} must be a 1-D cupy int32 array")
     if keys.size != values.size:
         raise ValueError("keys and values must have the same length")
+    expected_groups = operator.index(expected_groups)  # np.int64 has no .bit_length()
     if not 1 <= expected_groups <= MAX_GROUPS:
         raise ValueError(f"expected_groups must be in 1..{MAX_GROUPS}")
     keys = cp.ascontiguousarray(keys)

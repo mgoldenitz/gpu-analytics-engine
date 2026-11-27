@@ -10,8 +10,7 @@ import cupy as cp
 THREADS = 256
 ELEMS = 2 * THREADS  # each thread loads and writes two elements
 
-_SOURCE = r'''
-#define ELEMS 512
+_SOURCE = f"#define ELEMS {ELEMS}\n" + r'''
 
 // Step 1: scan one block of 512 elements in shared memory.
 extern "C" __global__ void scan_blocks(const int* in, int* out, int* block_sums, int n) {
@@ -75,7 +74,11 @@ _add_offsets = _module.get_function('add_offsets')
 
 
 def exclusive_scan(x):
-    """Return out where out[i] = x[0] + ... + x[i-1], and out[0] = 0."""
+    """Return out where out[i] = x[0] + ... + x[i-1], and out[0] = 0.
+
+    Sums are int32 with no overflow check: the caller keeps the total below 2^31.
+    The filter and group-by scan 0/1 flags, so their total is at most the row count.
+    """
     if not isinstance(x, cp.ndarray) or x.dtype != cp.int32 or x.ndim != 1:
         raise TypeError("x must be a 1-D cupy int32 array")
     x = cp.ascontiguousarray(x)
