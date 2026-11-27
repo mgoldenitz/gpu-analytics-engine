@@ -165,7 +165,7 @@ def groupby_block_speedup(g):
     ax.grid(axis="x", visible=False)
     ax.legend(loc="upper right", fontsize=8)
     save(fig, "groupby_block_speedup.png", "Group-by, 100M rows: block is 6-7x faster at 10 "
-         "groups, but 5% slower than global at 1M uniform groups")
+         "groups, but about 6% slower than global at 1M uniform groups")
 
 
 def main():
