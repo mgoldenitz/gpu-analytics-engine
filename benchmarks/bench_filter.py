@@ -4,6 +4,7 @@ Run from the project root:  python -m benchmarks.bench_filter
 """
 import csv
 import statistics
+import sys
 import time
 from pathlib import Path
 
@@ -28,6 +29,21 @@ GPU_ENGINES = {
     "filter_cub": (lambda xd, t: filter_less_than(xd, t, scan="cub"), 24),  # x, flags, cumsum, pos, out
     "filter_own": (lambda xd, t: filter_less_than(xd, t, scan="own"), 20),  # x, flags, pos, out
 }
+
+
+def warm_gpu(fn, seconds=1.0):
+    """Run fn in a busy loop. After about 20 s idle (long CPU runs) the GPU sits in P8
+    (SM 180 MHz, memory 405 MHz) and 3 warmups do not always lift it; about 0.15 s does."""
+    end = time.perf_counter() + seconds
+    while time.perf_counter() < end:
+        fn()
+        cp.cuda.Device().synchronize()
+
+
+def gpu_ms(fn):
+    """median_ms for a GPU mode: full clocks first."""
+    warm_gpu(fn)
+    return median_ms(fn)
 
 
 def median_ms(fn):
@@ -95,11 +111,11 @@ def bench_size(n, rows, skipped):
                 continue
             check(name, cp.asnumpy(f(xd, t)), expected)
             check(name + " pinned", to_host_pinned(f(cp.asarray(x_pin), t), out_pin), expected)
-            rows.append((name, n, pct, "kernel_only", median_ms(lambda: f(xd, t))))
+            rows.append((name, n, pct, "kernel_only", gpu_ms(lambda: f(xd, t))))
             rows.append((name, n, pct, "e2e_pageable",
-                         median_ms(lambda: cp.asnumpy(f(cp.asarray(x), t)))))
+                         gpu_ms(lambda: cp.asnumpy(f(cp.asarray(x), t)))))
             rows.append((name, n, pct, "e2e_pinned",
-                         median_ms(lambda: to_host_pinned(f(cp.asarray(x_pin), t), out_pin))))
+                         gpu_ms(lambda: to_host_pinned(f(cp.asarray(x_pin), t), out_pin))))
         print(f"n={n:,} sel={pct}% done", flush=True)
     del xd, x_pin, out_pin
     cp.get_default_memory_pool().free_all_blocks()
@@ -110,14 +126,15 @@ def main():
     rows, skipped = [], []
     for n in SIZES:
         bench_size(n, rows, skipped)
-    OUT.parent.mkdir(exist_ok=True)
-    with OUT.open("w", newline="") as fh:
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else OUT
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["engine", "n", "selectivity_pct", "mode", "median_ms"])
         w.writerows((e, n, p, m, f"{ms:.3f}") for e, n, p, m, ms in rows)
     for s in skipped:
         print("skipped:", s)
-    print_summary(OUT)
+    print_summary(out)
 
 
 if __name__ == "__main__":

@@ -1,24 +1,41 @@
 # Known issues
 
-- Polars beats GPU end to end at 1% and 10% selectivity from 10M rows, also with pinned memory. At 1% and 100M rows the copy overhead (16.5 ms: e2e_pinned minus kernel_only) costs more than the Polars filter (12.3 ms).
-- Pageable end to end never beats Polars. At 100M rows and 10%, the copies take about 80% of the pageable time.
-- The old `cupy_builtin` kernel_only outlier (13.77 ms at 10M and 90%) came from the Balanced-mode run. The Best performance run gives 1.18 ms.
-- Filling the pinned buffer from pageable memory takes 21.2 ms at 100M rows (one median of 10, outside the CSV). The pinned times leave it out.
-- The 8 GB GPU check uses estimates of bytes per row, not measured memory.
-- Many 1M-row wins are very close (about 0.4 ms for both sides at 1%).
-- `filter_noisy_run1.csv` was made with only 3.4 GB RAM free. Do not use it for the chart.
-- Group-by `global` with 10 groups: all threads atomicAdd to the same few slots, so they run one after another (89 ms kernel_only at 100M). `block` fixes it (12 ms).
-- Group-by needs the caller to give expected_groups. Too low gives an error, too high wastes memory.
-- Group-by output is in slot (hash) order, not key order.
-- CPU reruns, 3x each (Balanced mode, superseded): Polars 1K Zipf 100M 701/718/711 ms. Polars 1K 10M 49-55 ms uniform and 63-65 ms Zipf. DuckDB 1M uniform 100M 4175/6473/8673 ms. The Best performance CSV has 719.6, 96.0, 107.1 and 6666.9 ms for these points.
-- Filter crossover reruns at 10% (Balanced mode, superseded): the pandas 100M two modes (1676/1501/413 and 586/393/396 ms) are not in the CSVs now. The Best performance CSV has pandas 171.6 ms at 50M and 474.8 ms at 100M.
-- The GPU filter e2e_pageable dip from 50M to 100M (64.3 to 61.9 ms) was Balanced mode, superseded. The Best performance CSV goes up: 29.3 ms at 50M, 64.7 ms at 100M.
-- Chart colours: Polars #E69F00 against GPU #76b900 fails the protan colourblind check (delta E 2.5). Line style (dashed vs solid) and marker shape are the second encoding. DuckDB red passes against all other engines.
-- Group-by chart at 1M groups: GPU global and block e2e pinned are almost equal, so the hollow and filled markers overlap; the end labels tell them apart.
-- Chart titles are fixed text. Rerun the benchmarks and the titles can be wrong.
-- Group-by suspect points (Best performance CSV): global at 10M and 1K uniform groups had kernel_only 8.29 ms, above its e2e_pinned 5.54 ms. A rerun (3x, 2026-11-27) gave 1.93/2.00/2.18 ms kernel_only and 5.35/5.26/5.24 ms e2e_pinned. The CSV now has the median run (2.00 and 5.26 ms). Polars 1K groups is 719.6 ms Zipf and 344.3 ms uniform at 100M; uniform has two modes (114 to 545 ms over 3 runs). Polars 1K uniform at 10M is 96.0 ms, 9.6 ms per 1M rows, against 3.4 ms per 1M rows at 100M. DuckDB 1M uniform groups at 100M is 6666.9 ms, 3.6x its Zipf time (1866.5 ms).
-- Group-by with 1M groups: the table is 2M slots x 16 bytes = 32 MB, about the size of the L2 cache, so the random atomics go to DRAM. That is why 1M groups is slower than 1K groups.
-- racecheck does not find races between shared atomics and plain shared reads. Test: with barrier 2 removed, the count was wrong (3947 of 4096) and racecheck still gave 0 hazards, also with `--racecheck-detect-level info`. The pandas tests are the real check for the block kernel.
-- Block strategy with many distinct keys per block (1M uniform groups): most rows miss the shared table and go to global. Measured: 91.3 vs 86.6 ms kernel_only at 100M (5.4% slower). At 10M it is 0.36 ms slower (9.72 vs 9.36 ms). With 1M Zipf groups the hot keys hit the shared table, so block is 3.08x faster.
-- `exclusive_scan` checks only the total. With negative values a partial sum can pass int32 while the total fits; that is not checked.
-- The group-by memory check counts the table, flags and scan positions, not the output columns or the inputs. On an 8 GB card about 2^27 groups fit.
+All numbers are from the locked CSVs (SM 945 MHz, memory 12001 MHz), unless a line says otherwise. Older Balanced-mode and stock-clock notes are in git history.
+
+## Results
+
+- Filter: no crossover against Polars at 10%. GPU pinned wins only at 1M rows (0.533 against 0.848 ms). At 1% Polars wins at every size. At 100M and 1% the copies (40.2 - 20.8 = 19.4 ms) cost more than the whole Polars filter (10.7 ms).
+- Pageable end to end never beats Polars. At 100M and 10%, the copies are 67% of the pageable time (66.0 ms total, 21.6 ms kernel).
+- Group-by `global` at 10 groups: all threads atomicAdd to a few slots (159.4 ms kernel_only at 100M). `block` gives 27.0 ms.
+- Group-by `block` at 1M uniform groups: most rows miss the shared table, so it is 4% slower than `global` (98.0 against 94.1 ms). The 2M-slot table (32 MB) is about the L2 size, so the atomics go to DRAM.
+- The locked times are slower than stock. Example: block at 10 groups, 27.0 ms locked against 12.4 ms at stock.
+- Filling the pinned buffer takes 21.2 ms at 100M rows (stock-clock run, outside the CSV). The pinned times leave it out.
+
+## Lock and noise
+
+- 3 filter cells were still off-lock after a rerun: filter_cub 10M 50% e2e_pageable, filter_cub 10M 90% e2e_pageable, filter_cub 100M 50% kernel_only. The CSV keeps them. 10 of 13 off-lock cells were fixed by the rerun.
+- Power cap: some off-lock samples show SW power cap (0x4) with the SM at 397 to 892 MHz at 34 to 43 W.
+- At stock clocks the GPU dropped to P8 or P4 between runs, and group-by times changed by 60 to 77%. This is why the clocks are locked.
+- Polars filter at 100M and 10% went from 23.8 ms (stock run) to 15.5 ms (locked run), -35%. Polars does not use the GPU. Cause not measured.
+- Polars 1K Zipf groups at 100M is 731.4 ms, about 6x its uniform time. Stock run: the uniform point had two modes (114.2, 137.4, 544.7 ms).
+- A browser was open at about 00:50 on 2026-11-27, just after the locked group-by sweep started (00:50:22). I stopped it at 00:53 and ran group-by and Q1 again. The filter cell rerun had ended at 00:46:15, before the browser opened.
+- Some gate outputs (free RAM, power overlay, CPU use) were not saved to a file.
+- The gate for the Q1 ncu run was checked after the run. One sample showed sqlservr at 5.21% CPU, above the 5% limit. ncu counts are not timing, so the run stays.
+- `filter_noisy_run1.csv` was made with 3.4 GB RAM free. Do not use it.
+
+## Profiling
+
+- H2D copy speed: 26.4 GB/s for the filter and 22.2 GB/s for the group-by (nsys, session 1, stock clocks). Cause of the gap not measured.
+- ncu reports the DRAM clock as 8.99 GHz (session 1, stock) and 11.99 GHz (locked). The DRAM % values of the two sessions are not directly comparable.
+- ncu changes the clocks unless `--clock-control none` is set. Its default base clock gave 1.44 GHz (superseded run in docs/profiling.md).
+
+## Limits
+
+- Group-by needs `expected_groups`. Too low raises an error, too high wastes memory (2x too high: 1.93x slower, stock run). Output is in hash order.
+- Q1: group ids are fixed to the 6 TPC-H pairs. The largest int64 sum is at 0.737 of 2^63 at SF10.
+- Sanitizers for Q1 ran on `tests/test_q1.py` only, not on the full suite again.
+- racecheck does not find races between shared atomics and plain shared reads (barrier 2 removed: 3947 of 4096 counted, 0 hazards). The pandas tests are the real check.
+- `exclusive_scan` checks only the total, not partial sums with negative values.
+- The memory check counts the table, flags and scan positions, not inputs or outputs. About 2^27 groups fit in 8 GB.
+- Polars #E69F00 against GPU #76b900 fails the protan check (delta E 2.5); line style and marker are the second encoding.
+- Chart titles in `plot.py` are fixed text. Check them after a new sweep.

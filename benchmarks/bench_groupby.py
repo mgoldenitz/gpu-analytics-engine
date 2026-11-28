@@ -3,6 +3,7 @@
 Writes benchmarks/results/groupby.csv.  Run from the project root:  python -m benchmarks.bench_groupby
 """
 import csv
+import sys
 from pathlib import Path
 
 import cupy as cp
@@ -11,7 +12,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from benchmarks.bench_filter import median_ms, pinned_empty, to_host_pinned
+from benchmarks.bench_filter import gpu_ms, median_ms, pinned_empty, to_host_pinned
 from benchmarks.datagen import GROUP_COUNTS, GROUP_SIZES, group_keys, uniform_int32
 from engine.groupby import group_by_sum_count
 
@@ -90,7 +91,7 @@ def bench_size(n, rows):
             for st in STRATEGIES:
                 for mode, f in gpu_modes(k, v, kd, vd, k_pin, v_pin, true_groups, st).items():
                     check(f"hash_groupby {st} {mode}", columns("gpu", f()), expected)
-                    rows.append(("hash_groupby", st, n, groups, dist, mode, median_ms(f)))
+                    rows.append(("hash_groupby", st, n, groups, dist, mode, gpu_ms(f)))
             print(f"n={n:,} groups={groups:,} {dist} ({true_groups:,} used) done", flush=True)
             del kd, cpu
     del vd, v_pin, k_pin
@@ -116,8 +117,9 @@ def main():
     rows = []
     for n in GROUP_SIZES:
         bench_size(n, rows)
-    OUT.parent.mkdir(exist_ok=True)
-    with OUT.open("w", newline="") as fh:
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else OUT
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["engine", "strategy", "n", "groups", "dist", "mode", "median_ms"])
         w.writerows((*r[:-1], f"{r[-1]:.3f}") for r in rows)

@@ -28,4 +28,10 @@
 - Published benchmarks run in Windows Best performance on AC. In Balanced mode the CPU ran at about 800 to 900 MHz and Polars was up to 2x slower. The Balanced CSVs are in git history.
 - The group-by sweep stops at 100M rows to keep the CPU engine runs short. A 200M check used 3.17 GiB of GPU memory, so GPU memory is not the limit.
 - README References lists related work too (anilshanbhag/crystal), not only sources I read; the intro says the code is my own. cudf moved to NVIDIA/cudf (gh api redirect from rapidsai/cudf).
+- Lock the GPU clocks for all published runs: SM 945 MHz (`nvidia-smi -lgc 945,945`), memory 12001 MHz (`-lmc 12001,12001`). At stock clocks the GPU changed P-state between runs and group-by times changed by 60 to 77%. A first try at 1400 MHz failed: it is not a supported step (the driver used 1402 or 1395). A clock log runs with each sweep, and samples outside 937 to 952 MHz mark the cell as off-lock.
+- ncu runs with `--clock-control none`, so it keeps the lock. Its default sets a base clock (1.44 GHz), which is not the clock of the benchmarks.
+- Q1 kernel: one fused kernel, the same idea as the block group-by. The 6 (returnflag, linestatus) groups are known, so there is no hash table: 36 u64 shared slots (6 groups x 6 sums), 4096 rows per block, 256 threads, one global atomic per slot per block.
+- Q1 columns are encoded once (19 bytes per row) and the encoding is untimed for every engine. Each CPU engine gets its loaded table before the timer, as for filter and group-by.
+- Q1 is checked against DuckDB's answer (saved CSV per SF), not pandas.
+- Q1 modes are kernel_only and e2e_pinned only. Benchmark SFs are 1 and 10; SF0.01 and SF1 are for the tests.
 - `exclusive_scan` checks that the int64 total fits int32 and raises OverflowError. The filter and group-by call `_scan` (no check), because 0/1 flags total at most n and the check costs a full pass over the data.

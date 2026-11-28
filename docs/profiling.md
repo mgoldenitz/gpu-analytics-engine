@@ -1,4 +1,9 @@
-# Profiling (session 1)
+# Profiling
+
+Session 1 (filter and group-by, stock clocks) is first. Session 2 (TPC-H Q1, SM clock locked at
+945 MHz) is in "Session 2: TPC-H Q1" below.
+
+## Session 1: filter and group-by
 
 Nsight Systems and Nsight Compute runs of the published cases. Workload: `benchmarks/profile_run.py`
 (100M int32 rows, pinned host memory, 3 warmups and 3 profiled iterations per case, every result
@@ -48,7 +53,8 @@ Group-by (iteration, H2D, kernels range, insert kernel, D2H):
   `(keys == EMPTY).any()`: cupy_equal (1.787 to 2.132 ms) and cub_any_pass1 (0.663 to 0.793 ms).
   They are not our kernels.
 
-Against the published numbers (README):
+Against the published numbers at that time (the stock-clock CSVs at commit 46deed6, not the
+945 MHz CSVs that the README now uses):
 
 - Filter: kernels 12.630 against 12.8 ms (-1.3%). Iteration 30.886 against e2e_pinned 29.7 ms (+4.0%).
 - block 10: 12.057 against kernel_only 12.419 ms (-2.9%); 48.267 against e2e_pinned 45.837 ms (+5.3%).
@@ -97,7 +103,8 @@ Both are less than 0.3% of the group-by kernel time.
 
 ## Why block is 7.21x faster than global at 10 groups
 
-7.21x is the published kernel_only ratio (89.554 / 12.419 ms). In nsys the insert kernels alone
+7.21x is the stock-clock kernel_only ratio (89.554 / 12.419 ms, commit 46deed6). The 945 MHz
+CSV gives 5.90x. In nsys the insert kernels alone
 differ by 10.4x (88.970 / 8.585 ms); the CuPy check kernels take about the same time in both
 (2.579 ms block, 2.466 ms global).
 
@@ -169,3 +176,48 @@ DRAM peak (one extra run), then the summary:
   so the L2 atomic figures use `lts__t_sectors_op_atom.sum` and `lts__t_sectors_op_red.sum`.
 - The `lts__throughput` and `lts__d_atomic_input_cycles_active` maximum over slices come from the
   raw page that the sections already collect.
+
+## Session 2: TPC-H Q1 (SM clock locked at 945 MHz)
+
+Workload: `benchmarks/profile_q1.py` (SF10, 59,986,052 rows, the e2e_pinned path, 3 warmups and
+3 profiled iterations, every result checked against the DuckDB Q1 answer). Run date 2026-11-28.
+Clocks locked with nvidia-smi: SM 945 MHz, memory 12001 MHz. Raw reports in
+`C:\data\gpu-analytics-engine\profiles` (`q1_timeline.nsys-rep`, `q1_stats_*.csv`,
+`ncu_q1_block_lock945.*`).
+
+Checks: before nsys, free RAM 9.79 GB, Best performance overlay, AC power, highest other process
+sqlservr 4.35%. For the ncu run the check ran just after the run: free RAM 9.76 GB, same overlay,
+AC power; one 10 s sample had sqlservr at 5.21%, the others were below 5%.
+
+Nsight Systems, per iteration:
+
+- 1 kernel launch (q1_block), 1 memset (the output fill), 6 H2D copies (1139.7 MB in total),
+  1 D2H copy of 288 bytes. No hash table and no compaction kernels.
+- q1_block 65.917 ms (median). H2D 42.85 ms on average (26.6 GB/s); NVTX "q1 H2D" median 43.13 ms.
+- Iteration about 109.6 ms, against 109.342 ms e2e_pinned in `tpch_q1.csv`.
+
+Nsight Compute, q1_block (iter1, `--launch-skip 3`, `--clock-control none` so the 945 MHz lock
+stays; ncu reports SM frequency 945.00 MHz):
+
+- Duration 65.87 ms (nsys 65.917 ms), so at this clock ncu and nsys agree.
+- DRAM 4.90% of peak: 17.39 GB/s of 383.7 GB/s (32 byte per cycle at the reported 11.99 GHz DRAM
+  clock). 1.145 GB read, about 19 bytes per row.
+- L1/TEX 81.67%, Compute (SM) 74.73%, L2 2.44%.
+- 296,781,817 shared atomic instructions; 102,522 L2 reduction sectors (the one flush per block).
+- Occupancy 66.47% achieved / 66.67% theoretical, limited by registers (64 per thread).
+  Grid 14,646 blocks of 256 threads, 288 bytes static shared memory per block.
+- Bottleneck: the L1/shared-memory pipe, where the shared atomics run, and SM issue. DRAM is at
+  4.9%, so the kernel is not limited by memory bandwidth. A faster kernel needs fewer shared
+  atomics per row (for example a warp-level reduce first), not fewer bytes.
+- A first ncu run used the default `--clock-control base`. It reported SM 1.44 GHz, 43.30 ms and
+  DRAM 7.21%. It is not used, because it was not at the lock.
+
+Commands (same paths as session 1):
+
+```
+& $nsys profile --trace=cuda,nvtx --sample=none --force-overwrite=true -o "$p\q1_timeline" $py -m benchmarks.profile_q1
+& $nsys stats --force-export=true --report cuda_gpu_kern_sum,cuda_gpu_mem_time_sum,cuda_gpu_mem_size_sum,nvtx_sum,cuda_gpu_trace --format csv --output "$p\q1_stats" "$p\q1_timeline.nsys-rep"
+& $ncu --clock-control none --section SpeedOfLight --section MemoryWorkloadAnalysis --section Occupancy --section LaunchStats --metrics "smsp__inst_executed_op_shared_atom.sum,lts__t_sectors_op_red.sum,dram__bytes.sum,dram__bytes.sum.peak_sustained,dram__cycles_elapsed.avg.per_second,dram__bytes.sum.per_second" -k "regex:^q1_block$" --launch-skip 3 --launch-count 1 -f -o "$p\ncu_q1_block_lock945" $py -m benchmarks.profile_q1
+& $ncu --import "$p\ncu_q1_block_lock945.ncu-repz" --page details --csv > "$p\ncu_q1_block_lock945.csv"
+& $ncu --import "$p\ncu_q1_block_lock945.ncu-repz" --page raw --csv > "$p\ncu_q1_block_lock945_raw.csv"
+```

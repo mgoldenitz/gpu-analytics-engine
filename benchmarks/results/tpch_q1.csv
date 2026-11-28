@@ -1,0 +1,11 @@
+sf,rows,engine,mode,threads,median_ms
+1,6001215,pandas,cpu,1,352.678
+1,6001215,polars,cpu,20,19.298
+1,6001215,duckdb,cpu,20,23.727
+1,6001215,gpu_q1,kernel_only,-,7.046
+1,6001215,gpu_q1,e2e_pinned,-,11.605
+10,59986052,pandas,cpu,1,3544.248
+10,59986052,polars,cpu,20,141.298
+10,59986052,duckdb,cpu,20,188.245
+10,59986052,gpu_q1,kernel_only,-,66.213
+10,59986052,gpu_q1,e2e_pinned,-,109.342

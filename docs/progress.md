@@ -35,6 +35,13 @@
 - 2026-11-27: charts use pandas #0072B2, Polars #E69F00, DuckDB red #D62728, GPU #76b900. GPU lines solid 2.5, CPU dashed 1.5; hollow markers for GPU pageable and global. README References adds NVIDIA/cudf and anilshanbhag/crystal.
 - /reflect: 2 new chart rules in CLAUDE.md (update decisions.md with style changes, check same-colour lines still differ); PROJECT_NOTES cudf path now NVIDIA/cudf.
 
+- 2026-11-27: profiling session 1 (Nsight Systems and Nsight Compute) for filter and group-by, in `docs/profiling.md` (commit 46deed6). Pinned `requirements.txt` from pip freeze.
+- 2026-11-27: TPC-H Q1. `benchmarks/tpch_data.py` (dbgen SF0.01, SF1, SF10 in C:\data, encoding, DuckDB reference), `engine/q1.py` (fused `q1_block`, no hash table), `bench_q1.py`, `plot_q1.py`, `profile_q1.py`. 171 tests pass. Q1 sanitizers: memcheck 0 errors, racecheck 0 hazards, synccheck 0 errors.
+- 2026-11-27: SM clock locked at 945 MHz and memory at 12001 MHz. Soak 1090 samples, 0 off. All three sweeps rerun locked; 13 filter cells rerun, 3 still off.
+- Q1 e2e pinned beats Polars: SF1 11.6 against 19.3 ms (1.66x), SF10 109.3 against 141.3 ms (1.29x).
+- Profiling session 2 (Q1 under the lock): DRAM 4.90%, L1/TEX 81.67%. The bottleneck is shared atomics, not bytes.
+- 2026-11-27: README rewritten with the locked numbers and the lock statement. Status: frozen on 2026-11-27, tag v1.0.0.
+
 ## Next
 
-- Choose the strategy automatically from expected_groups, or keep it a caller option.
+- Frozen. No new features. Reset the clocks after work: `nvidia-smi -rgc` and `nvidia-smi -rmc`.
