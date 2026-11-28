@@ -99,8 +99,7 @@ def filter_crossover(f):
     ax.yaxis.set_major_formatter(FuncFormatter(plain_fmt))
     ax.set_xticks(sizes)
     ax.set_xlim(right=sizes[-1] * 3.2)  # room for the end labels
-    save(fig, "filter_crossover.png", "Filter, 10% selectivity: GPU beats pandas and DuckDB at "
-         "every size. Pinned and pageable beat Polars only at 1M rows",
+    save(fig, "filter_crossover.png", "Filter, 10% of rows passing: Polars is fastest from 10M rows",
          (ax, ends))
 
 
@@ -125,9 +124,7 @@ def filter_time_split(f):
     ax.set(ylabel="Median time, ms", ylim=(0, max(totals) * 1.25))
     ax.grid(axis="x", visible=False)
     ax.legend(loc="upper right", fontsize=8)
-    pg, pn = copies[1] / totals[1], copies[2] / totals[2]
-    save(fig, "filter_time_split.png", f"Filter, 100M rows, 10%: the copy is the bottleneck "
-         f"({pg:.0%} of pageable time, {pn:.0%} of pinned)")
+    save(fig, "filter_time_split.png", "Filter, 100M rows: copying data takes most of the GPU time")
 
 
 def groupby_by_groups(g):
@@ -144,8 +141,7 @@ def groupby_by_groups(g):
     ax.xaxis.set_major_formatter(FuncFormatter(plain_fmt))
     ax.yaxis.set_major_formatter(FuncFormatter(plain_fmt))
     ax.set_xlim(5, 2e7)  # room for the end labels
-    save(fig, "groupby_by_groups.png", "Group-by, 100M rows, uniform keys: GPU block beats every "
-         "CPU engine at all group counts; global loses to Polars at 10", (ax, ends))
+    save(fig, "groupby_by_groups.png", "Group-by, 100M rows: the GPU block strategy beats every CPU engine", (ax, ends))
 
 
 def groupby_block_speedup(g):
@@ -168,8 +164,7 @@ def groupby_block_speedup(g):
            ylabel="Speedup of block over global, x (kernel only)")
     ax.grid(axis="x", visible=False)
     ax.legend(loc="upper right", fontsize=8)
-    save(fig, "groupby_block_speedup.png", "Group-by, 100M rows: block is 5-6x faster at 10 "
-         "groups, but about 4% slower than global at 1M uniform groups")
+    save(fig, "groupby_block_speedup.png", "Group-by, 100M rows: block vs global strategy (kernel only)")
 
 
 def main():

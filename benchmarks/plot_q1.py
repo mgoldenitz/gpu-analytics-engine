@@ -1,45 +1,61 @@
 """Make docs/figures/tpch_q1.png from results/tpch_q1.csv, in the style of plot.py.
 
+Two panels (SF1, SF10) of horizontal bars, one bar per engine, fastest at the top.
+CPU engines use the narrow columns, like q1_v3; the wide CPU times stay in the README text.
+
 Run from the project root:  python -m benchmarks.plot_q1
 """
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
-from benchmarks.plot import LABEL, line, load, plain_fmt, save
+from benchmarks.plot import COLOR, LABEL, load, plain_fmt, save
+
+# (engine, mode, label, colour, hatched). Hatched = kernel only (no copies), as in plot.py
+# where texture, not a second hue, separates two results of the same engine.
+# q1_v2 gets a lighter green so the two solid end-to-end GPU bars differ by more than their label.
+GPU_LIGHT = "#b9dd85"
+BARS = [
+    ("gpu_q1_v3", "kernel_only", "q1_v3 kernel only", COLOR["gpu"], True),
+    ("gpu_q1_v3", "e2e_pinned", "q1_v3 end to end", COLOR["gpu"], False),
+    ("gpu_q1_v2", "e2e_pinned", "q1_v2 end to end (wide)", GPU_LIGHT, False),
+    ("polars_narrow", "cpu", LABEL["polars"], COLOR["polars"], False),
+    ("duckdb_narrow", "cpu", LABEL["duckdb"], COLOR["duckdb"], False),
+    ("pandas_narrow", "cpu", LABEL["pandas"], COLOR["pandas"], False),
+]
+
+
+def ms_fmt(t):
+    return f"{t:,.1f} ms"  # one decimal, as in the README
 
 
 def tpch_q1(q):
     sfs = sorted({int(k[0]) for k in q})
     rows = {int(k[0]): int(k[1]) for k in q}
-    ms = lambda e, m: [q[next(k for k in q if int(k[0]) == sf and k[2] == e and k[3] == m)]
-                       for sf in sfs]
-    fig, ax = plt.subplots(figsize=(8, 4.6))
-    ends = []
-    for e in ("pandas", "polars", "duckdb"):
-        ends.append(line(ax, sfs, ms(e, "cpu"), e, LABEL[e]))
-        # narrow columns: same colour, dotted and hollow, so it differs from wide by style
-        ends.append(line(ax, sfs, ms(f"{e}_narrow", "cpu"), e, f"{LABEL[e]} narrow", hollow=True))
-        ax.lines[-1].set(ls=":")
-    for k, name in (("v2", "q1_v2 (wide)"), ("v3", "q1_v3 (narrow)")):
-        e = f"gpu_q1_{k}"
-        ends.append(line(ax, sfs, ms(e, "e2e_pinned"), "gpu", f"{name} end to end (pinned)"))
-        if k == "v3":  # new kernel: dash-dot, so it differs from v2 by line style
-            ax.lines[-1].set(ls="-.")
-        ends.append(line(ax, sfs, ms(e, "kernel_only"), "gpu", f"{name} kernel only", hollow=True))
-        if k == "v3":
-            ax.lines[-1].set(ls="-.")
-    ax.set(xscale="log", yscale="log", xlabel="TPC-H scale factor (lineitem rows)",
-           ylabel="Median time, ms (log scale)")
-    ax.set_xticks(sfs, [f"SF{sf}\n{rows[sf] / 1e6:.1f}M rows" for sf in sfs])
-    ax.minorticks_off()
-    ax.yaxis.set_major_formatter(FuncFormatter(plain_fmt))
-    ax.set_xlim(sfs[0] / 1.6, sfs[-1] * 3.2)  # room for the end labels
-    best = [min(a, b) for a, b in zip(ms("polars_narrow", "cpu"), ms("duckdb_narrow", "cpu"))]
-    sp = [b / g for b, g in zip(best, ms("gpu_q1_v3", "e2e_pinned"))]
-    kx = [a / b for a, b in zip(ms("gpu_q1_v2", "kernel_only"), ms("gpu_q1_v3", "kernel_only"))]
-    save(fig, "tpch_q1.png", f"TPC-H Q1 on narrow columns: q1_v3 end to end (pinned) beats the "
-         f"fastest CPU engine by {sp[0]:.1f}x at SF{sfs[0]} and {sp[-1]:.1f}x at SF{sfs[-1]}; "
-         f"its kernel is {kx[-1]:.1f}x faster than q1_v2 at SF{sfs[-1]}", (ax, ends))
+    get = lambda sf, e, m: q[next(k for k in q if int(k[0]) == sf and k[2] == e and k[3] == m)]
+    # one engine order for both panels: fastest at the top, by the largest scale factor
+    order = sorted(BARS, key=lambda b: get(sfs[-1], b[0], b[1]))
+    fig, axes = plt.subplots(1, len(sfs), figsize=(9, 3.9), sharey=True)
+    hi = max(get(sf, b[0], b[1]) for sf in sfs for b in BARS)
+    lo = min(get(sf, b[0], b[1]) for sf in sfs for b in BARS)
+    for ax, sf in zip(axes, sfs):
+        ys = range(len(order))
+        ts = [get(sf, b[0], b[1]) for b in order]
+        for y, t, b in zip(ys, ts, order):
+            ax.barh(y, t, height=0.62, color=b[3], hatch="//" if b[4] else None,
+                    edgecolor="white", linewidth=1.5)
+            ax.annotate(ms_fmt(t), (t, y), xytext=(4, 0), textcoords="offset points",
+                        va="center", fontsize=8)
+        ax.set_xscale("log")
+        ax.set_xlim(lo / 2, hi * 6)  # room for the value labels
+        ax.xaxis.set_major_formatter(FuncFormatter(plain_fmt))
+        ax.minorticks_off()
+        ax.grid(axis="y", visible=False)
+        ax.set_title(f"SF{sf} ({rows[sf] / 1e6:.1f}M rows)", fontsize=9.5, loc="left")
+        ax.set_xlabel("Median time, ms (log scale)")
+    axes[0].set_yticks(list(range(len(order))), [b[2] for b in order])
+    axes[0].invert_yaxis()  # fastest at the top
+    axes[0].tick_params(axis="y", length=0)
+    save(fig, "tpch_q1.png", "TPC-H Q1, narrow columns: median time by engine")
 
 
 if __name__ == "__main__":
