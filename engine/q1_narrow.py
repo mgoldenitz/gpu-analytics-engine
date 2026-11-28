@@ -4,8 +4,8 @@ The same plan as q1_v2 in engine/q1.py (36 register totals per thread, warp shuf
 shared add per warp, one global add per block). Two changes:
   1. Narrow types (benchmarks/tpch_data.narrow): price int32 cents, qty uint8 whole units,
      disc and tax uint8 hundredths, ship uint16 days since SHIP_BASE, gid uint8.
-  2. Each thread loads 4 consecutive rows at once: int4 (16 bytes) for price, ushort4
-     (8 bytes) for ship, uchar4 (4 bytes) for each 1-byte column. The last n % 4 rows
+  2. Each thread loads 4 consecutive rows at once: int4 (16 bytes) for price, uint2
+     (8 bytes) for ship, one u32 (4 bytes) for each 1-byte column. The last n % 4 rows
      go through a plain one-row loop.
 sum_qty leaves the kernel in hundredths (x 100 in the block flush), so engine.q1.q1_rows
 reads the result the same way as for v1 and v2.
