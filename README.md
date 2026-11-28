@@ -1,4 +1,4 @@
-# gpu-analytics-engine
+# GPU Analytics Engine
 
 Hand-written CUDA filter, hash group-by and TPC-H Q1 kernels in CuPy RawKernel, benchmarked against pandas, Polars and DuckDB on an RTX 5060 Laptop GPU.
 
@@ -64,23 +64,23 @@ The query is `value < threshold` on one int32 column, with 10% of the rows passi
 
 ![Filter time split at 100M rows](docs/figures/filter_time_split.png)
 
-At 100M rows and 10% selectivity, the GPU kernels take 21.6 ms. End to end, the same filter takes 66.0 ms with pageable memory and 42.6 ms with pinned memory. In other words, the copy and transfer overhead is 67% of the pageable time and 49% of the pinned time. The copy part is the end-to-end time minus the kernel-only time, so it also includes the allocation of the output. At the locked clock, Polars (15.5 ms) is faster than my own kernels alone. With CUB's scan the kernels take 13.4 ms, but the pinned time is still 34.2 ms.
+At 100M rows and 10% selectivity, the GPU kernels take 21.6 ms. End-to-end, the same filter requires 66.0 ms with pageable memory and 42.6 ms with pinned memory. In other words, the copy and transfer overhead is 67% of the pageable time and 49% of the pinned time. The copy part is the end-to-end time minus the kernel-only time, so it also includes the allocation of the output. At the locked clock, Polars (15.5 ms) is faster than my own kernels alone. With CUB's scan the kernels take 13.4 ms, but the pinned time is still 34.2 ms.
 
 The pinned times start with the data already in the pinned buffer. In the stock-clock run (before the lock), the copy from normal memory into the pinned buffer took 21.2 ms at 100M rows. I did not measure it again under the lock.
 
 ### Filter at 1% selectivity: Polars wins at every size
 
-At 1% selectivity, Polars beats the GPU (pinned) at every size, also at 1M rows (0.403 ms against 0.479 ms). At 100M rows Polars takes 10.7 ms. The GPU takes 40.2 ms end to end, and the kernels alone take 20.8 ms (12.7 ms with CUB's scan).
+At 1% selectivity, Polars beats the GPU (pinned) at every size, also at 1M rows (0.403 ms against 0.479 ms). At 100M rows Polars requires 10.7 ms. The GPU requires 40.2 ms end to end, and the kernels alone take 20.8 ms (12.7 ms with CUB's scan).
 
 ### Group-by: GPU against the CPU engines
 
 ![Group-by time by number of groups](docs/figures/groupby_by_groups.png)
 
-The query is `SELECT key, SUM(value), COUNT(*) GROUP BY key` on 100M rows with uniform keys. The GPU block strategy (pinned) beats every CPU engine at every group count. Against Polars, it takes 57.4 ms against 87.3 ms at 10 groups, 54.3 ms against 125.9 ms at 1K groups, and 129.2 ms against 1,102.6 ms at 1M groups. With Zipf keys at 1K groups, Polars took 731.4 ms and DuckDB 130.2 ms. I did not measure why Polars is slower there.
+The query is `SELECT key, SUM(value), COUNT(*) GROUP BY key` on 100M rows with uniform keys. The GPU block strategy (pinned) beats every CPU engine at every group count. Against Polars, it requires 57.4 ms against 87.3 ms at 10 groups, 54.3 ms against 125.9 ms at 1K groups, and 129.2 ms against 1,102.6 ms at 1M groups. With Zipf keys at 1K groups, Polars took 731.4 ms and DuckDB 130.2 ms. I did not measure why Polars is slower there.
 
 ### Where the group-by loses: the global strategy at 10 groups
 
-The global strategy loses to Polars and DuckDB at 10 groups: 189.7 ms (pinned) against 87.3 ms and 122.9 ms. Its kernel alone takes 159.4 ms. With 10 groups, all threads do atomic adds on the same few table slots, so the hardware runs these adds one after another. The block strategy adds up the rows of each block in shared memory first, so the kernel time goes down to 27.0 ms.
+The global strategy loses to Polars and DuckDB at 10 groups: 189.7 ms (pinned) against 87.3 ms and 122.9 ms. Its kernel alone requires 159.4 ms. With 10 groups, all threads do atomic adds on the same few table slots, so the hardware runs these adds one after another. The block strategy adds up the rows of each block in shared memory first, so the kernel time goes down to 27.0 ms.
 
 ### Group-by: block against global
 
