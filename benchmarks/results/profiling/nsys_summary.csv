@@ -1,0 +1,67 @@
+case,phase,iterations,cpu_range_ms,gpu_span_ms,kernel_ms,h2d_ms,h2d_mb,d2h_ms,d2h_mb,gpu_idle_ms,gpu_ops,h2d_gb_s,d2h_gb_s
+filter,iteration total,3,30.886,30.675,12.630,15.147,400.000,1.520,40.000,1.263,11.000,26.41,26.31
+filter,kernel flag_lt,3,,,2.385,,,,,,,,
+filter,kernel scan_blocks,3,,,4.944,,,,,,,,
+filter,kernel add_offsets,3,,,2.350,,,,,,,,
+filter,kernel cupy_add__int32_int32_int32,3,,,0.001,,,,,,,,
+filter,kernel scatter,3,,,2.948,,,,,,,,
+filter,H2D,3,15.459,15.147,0.000,15.147,400.000,0.000,0.000,0.000,1.000,26.41,
+filter,flag,3,2.673,2.385,2.385,0.000,0.000,0.000,0.000,0.000,1.000,,
+filter,scan,3,7.726,7.486,7.294,0.000,0.000,0.000,0.000,0.190,5.000,,
+filter,count sync,3,0.194,0.088,0.001,0.000,0.000,0.002,0.000,0.085,2.000,,0.00
+filter,scatter,3,3.175,2.948,2.948,0.000,0.000,0.000,0.000,0.000,1.000,,
+filter,D2H,3,1.578,1.518,0.000,0.000,0.000,1.518,40.000,0.000,1.000,,26.35
+groupby block 10,iteration total,3,48.267,48.204,11.137,36.003,800.000,0.009,0.000,1.178,20.000,22.22,0.00
+groupby block 10,kernel cupy_equal__int32_int_bool,3,,,1.870,,,,,,,,
+groupby block 10,kernel cupy_cub_any_pass1,3,,,0.693,,,,,,,,
+groupby block 10,kernel cupy_cub_any_pass2,3,,,0.016,,,,,,,,
+groupby block 10,kernel cupy_copy__int_int32,3,,,0.000,,,,,,,,
+groupby block 10,kernel insert_block,3,,,8.585,,,,,,,,
+groupby block 10,kernel flag_used,3,,,0.001,,,,,,,,
+groupby block 10,kernel scan_blocks,3,,,0.001,,,,,,,,
+groupby block 10,kernel cupy_add__int32_int32_int32,3,,,0.001,,,,,,,,
+groupby block 10,kernel scatter,3,,,0.001,,,,,,,,
+groupby block 10,H2D,3,36.076,36.007,0.000,36.003,800.000,0.000,0.000,0.005,2.000,22.22,
+groupby block 10,kernels,3,12.057,11.903,11.137,0.000,0.000,0.005,0.000,0.802,15.000,,0.00
+groupby block 10,D2H,3,0.095,0.048,0.000,0.000,0.000,0.004,0.000,0.044,3.000,,0.00
+groupby global 10,iteration total,3,128.823,128.765,91.432,35.829,800.000,0.009,0.000,1.339,20.000,22.33,0.00
+groupby global 10,kernel cupy_equal__int32_int_bool,3,,,1.787,,,,,,,,
+groupby global 10,kernel cupy_cub_any_pass1,3,,,0.663,,,,,,,,
+groupby global 10,kernel cupy_cub_any_pass2,3,,,0.016,,,,,,,,
+groupby global 10,kernel cupy_copy__int_int32,3,,,0.000,,,,,,,,
+groupby global 10,kernel insert,3,,,88.970,,,,,,,,
+groupby global 10,kernel flag_used,3,,,0.001,,,,,,,,
+groupby global 10,kernel scan_blocks,3,,,0.001,,,,,,,,
+groupby global 10,kernel cupy_add__int32_int32_int32,3,,,0.001,,,,,,,,
+groupby global 10,kernel scatter,3,,,0.001,,,,,,,,
+groupby global 10,H2D,3,35.914,35.834,0.000,35.829,800.000,0.000,0.000,0.005,2.000,22.33,
+groupby global 10,kernels,3,92.740,92.539,91.432,0.000,0.000,0.005,0.000,0.966,15.000,,0.00
+groupby global 10,D2H,3,0.096,0.045,0.000,0.000,0.000,0.004,0.000,0.041,3.000,,0.00
+groupby block 1000000,iteration total,3,128.695,127.789,88.862,35.963,800.000,0.794,20.000,1.700,24.000,22.25,25.18
+groupby block 1000000,kernel cupy_equal__int32_int_bool,3,,,1.932,,,,,,,,
+groupby block 1000000,kernel cupy_cub_any_pass1,3,,,0.793,,,,,,,,
+groupby block 1000000,kernel cupy_cub_any_pass2,3,,,0.018,,,,,,,,
+groupby block 1000000,kernel cupy_copy__int_int32,3,,,0.020,,,,,,,,
+groupby block 1000000,kernel insert_block,3,,,85.829,,,,,,,,
+groupby block 1000000,kernel flag_used,3,,,0.035,,,,,,,,
+groupby block 1000000,kernel scan_blocks,3,,,0.121,,,,,,,,
+groupby block 1000000,kernel add_offsets,3,,,0.026,,,,,,,,
+groupby block 1000000,kernel cupy_add__int32_int32_int32,3,,,0.001,,,,,,,,
+groupby block 1000000,kernel scatter,3,,,0.178,,,,,,,,
+groupby block 1000000,H2D,3,36.441,35.968,0.000,35.963,800.000,0.000,0.000,0.005,2.000,22.25,
+groupby block 1000000,kernels,3,90.694,90.517,88.862,0.000,0.000,0.005,0.000,1.150,19.000,,0.00
+groupby block 1000000,D2H,3,1.590,0.927,0.000,0.000,0.000,0.789,20.000,0.155,3.000,,25.33
+groupby global 1000000,iteration total,3,127.056,126.103,87.779,35.912,800.000,0.773,20.000,1.517,24.000,22.28,25.86
+groupby global 1000000,kernel cupy_equal__int32_int_bool,3,,,2.132,,,,,,,,
+groupby global 1000000,kernel cupy_cub_any_pass1,3,,,0.773,,,,,,,,
+groupby global 1000000,kernel cupy_cub_any_pass2,3,,,0.018,,,,,,,,
+groupby global 1000000,kernel cupy_copy__int_int32,3,,,0.019,,,,,,,,
+groupby global 1000000,kernel insert,3,,,84.354,,,,,,,,
+groupby global 1000000,kernel flag_used,3,,,0.035,,,,,,,,
+groupby global 1000000,kernel scan_blocks,3,,,0.106,,,,,,,,
+groupby global 1000000,kernel add_offsets,3,,,0.023,,,,,,,,
+groupby global 1000000,kernel cupy_add__int32_int32_int32,3,,,0.001,,,,,,,,
+groupby global 1000000,kernel scatter,3,,,0.197,,,,,,,,
+groupby global 1000000,H2D,3,36.313,35.917,0.000,35.912,800.000,0.000,0.000,0.005,2.000,22.28,
+groupby global 1000000,kernels,3,89.196,88.968,87.779,0.000,0.000,0.005,0.000,1.064,19.000,,0.00
+groupby global 1000000,D2H,3,1.669,0.859,0.000,0.000,0.000,0.768,20.000,0.072,3.000,,26.04

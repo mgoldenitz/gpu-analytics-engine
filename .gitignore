@@ -5,3 +5,9 @@ __pycache__/
 .claude/worktrees/
 .claude/settings.local.json
 .impeccable/
+
+# Nsight profiles (kept in C:\data\gpu-analytics-engine\profiles)
+*.nsys-rep
+*.ncu-rep
+*.sqlite
+*.ncu-repz
