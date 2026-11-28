@@ -116,7 +116,13 @@ def v2_blocks(n):
 
 
 def q1_sums(price, qty, disc, tax, ship, gid, cutoff, out=None, kernel="v1"):
-    """Launch kernel "v1" or "v2". Returns the (6 groups x 6 aggregates) uint64 sums, still on the GPU."""
+    """Launch kernel "v1", "v2" or "v3". Returns the (6 groups x 6 aggregates) uint64 sums, still on the GPU.
+
+    "v3" takes the narrow columns of benchmarks/tpch_data.narrow (engine/q1_narrow.py).
+    """
+    if kernel == "v3":  # imported here: engine/q1_narrow.py imports this module
+        from engine.q1_narrow import q1_v3_sums
+        return q1_v3_sums(price, qty, disc, tax, ship, gid, cutoff, out)
     cols = {"price": price, "qty": qty, "disc": disc, "tax": tax, "ship": ship, "gid": gid}
     n = price.size
     for name, a in cols.items():

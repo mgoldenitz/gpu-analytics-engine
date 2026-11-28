@@ -2,9 +2,9 @@
 
 Hand-written CUDA filter, hash group-by and TPC-H Q1 kernels in CuPy RawKernel, benchmarked against pandas, Polars and DuckDB on an RTX 5060 Laptop GPU.
 
-Status: frozen on 2026-11-28, v1.1.0 (Q1 kernel fix). No new features.
+Status: frozen on 2026-11-28, v1.2.0. No new features.
 
-- TPC-H Q1, SF10 (59,986,052 rows): 64.7 ms on the GPU end to end (pinned, `q1_v2`), against 141.3 ms for Polars and 188.2 ms for DuckDB.
+- TPC-H Q1, SF10 (59,986,052 rows), all engines on the same narrow columns: 27.3 ms on the GPU end to end (pinned, `q1_v3`), against 133.6 ms for Polars and 209.6 ms for DuckDB.
 - Group-by, 100M rows, 1M groups: 129.2 ms on the GPU (block strategy, pinned), against 1,102.6 ms for Polars.
 - Filter, 100M rows, 10% selectivity: Polars wins. It takes 15.5 ms. The GPU takes 42.6 ms end to end (pinned), and its kernels alone take 21.6 ms.
 - Group-by, 100M rows, 10 groups: the block kernel is 5.90x faster than the global kernel (27.0 ms against 159.4 ms).
@@ -15,7 +15,7 @@ All GPU times in the CSVs and charts were measured with the SM clock locked at 9
 
 - Reason: at stock clocks, the laptop GPU changed its clock from run to run (power states P8 and P4), and some group-by times changed by 60 to 77% between runs. With the lock, the times are repeatable.
 - Cost: the locked times are slower than at stock clocks. For example, the block group-by kernel at 10 groups takes 27.0 ms locked and 12.4 ms at stock clocks. Thus, compare the GPU numbers with each other and with the CPU engines on this machine, not with other GPU benchmarks.
-- Check: nvidia-smi logged the clocks every 100 ms during each timing run. A sample counted as on the lock at 937, 945 or 952 MHz (the supported steps nearest 945) and 12001 MHz memory. The first 1.0 s of each window is skipped (the warmup moves the card from P4 to P0). Results: a soak of 1,090 samples with 0 off the lock; group-by 144 windows with 0 off (32 windows were shorter than 1 s and had no samples); Q1 (`q1_v1` and `q1_v2` rerun for v1.1.0) 8 windows with 0 off (2 windows had no samples after the skip); filter 13 cells off, of which 10 were run again on the lock. 3 filter cells stay off the lock (see `docs/known-issues.md`).
+- Check: nvidia-smi logged the clocks every 100 ms during each timing run. A sample counted as on the lock at 937, 945 or 952 MHz (the supported steps nearest 945) and 12001 MHz memory. The first 1.0 s of each window is skipped (the warmup moves the card from P4 to P0). Results: a soak of 1,090 samples with 0 off the lock; group-by 144 windows with 0 off (32 windows were shorter than 1 s and had no samples); Q1 (`q1_v1`, `q1_v2` and `q1_v3`, rerun for v1.2.0) 12 windows with 0 off (3 windows had no samples after the skip); filter 13 cells off, of which 10 were run again on the lock. 3 filter cells stay off the lock (see `docs/known-issues.md`).
 - The CPU engines do not depend on the GPU clock.
 - To remove the lock: `nvidia-smi -rgc` and `nvidia-smi -rmc` (as administrator).
 
@@ -27,22 +27,29 @@ All numbers are median times in milliseconds from `benchmarks/results/filter.csv
 
 ![TPC-H Q1 at SF1 and SF10](docs/figures/tpch_q1.png)
 
-Q1 filters lineitem on the ship date, groups by (returnflag, linestatus), and computes 4 sums, 3 averages and a count. The group id has only 6 possible values (returnflag A, N or R times linestatus F or O), so both Q1 kernels keep 36 sums (6 groups x 6 aggregates), indexed directly by group id. They need no hash table.
+Q1 filters lineitem on the ship date, groups by (returnflag, linestatus), and computes 4 sums, 3 averages and a count. The group id has only 6 possible values (returnflag A, N or R times linestatus F or O), so all Q1 kernels keep 36 sums (6 groups x 6 aggregates), indexed directly by group id. They need no hash table.
 
-1. The first kernel, `q1_v1`. One fused kernel does the filter and the group-by. Each block adds up 4,096 rows in shared memory, with 6 shared atomic adds for each row that passes the filter. Then it does one global atomic add per non-zero sum. This is the same block pre-aggregation as the block group-by. At SF10 it takes 66.2 ms with kernel only and 110.1 ms end to end (pinned). At SF1 it takes 7.2 ms and 11.6 ms.
+1. The first kernel, `q1_v1`. One fused kernel does the filter and the group-by. Each block adds up 4,096 rows in shared memory, with 6 shared atomic adds for each row that passes the filter. Then it does one global atomic add per non-zero sum. This is the same block pre-aggregation as the block group-by. At SF10 it takes 66.2 ms with kernel only and 109.1 ms end to end (pinned). At SF1 it takes 7.1 ms and 11.6 ms.
 2. What Nsight Compute showed (SF10, under the lock). `q1_v1` used 4.90% of the peak DRAM bandwidth (17.39 GB/s). The L1/TEX pipe, where the shared atomic adds run, was at 81.67%, and Compute (SM) was at 74.73%. The kernel ran 296,781,817 shared atomic instructions. Thus the limit was the shared atomics, not the bytes read.
 3. The change, `q1_v2`. Each thread keeps its own 36 totals in registers and goes through the rows with a grid-stride loop. For each row, it adds the 6 values to the totals of the row's group with a mask (all ones for that group, zero for the other groups). Thus the loop has no branches on the group and no atomics. At the end, the 32 threads of each warp add their totals together in 5 `__shfl_down_sync` steps. Lane 0 of each warp then does one shared atomic add per non-zero total, and each block does one global atomic add per non-zero total. The grid is 52 blocks of 256 threads (2 blocks on each of the 26 SMs, from the CUDA occupancy API). The 36 totals use 96 registers per thread, with no spill to local memory. The sums stay exact 64-bit integers, with the same overflow limit.
-4. The result. `q1_v2` beats every CPU engine end to end (pinned) at both sizes:
-   - SF1 (6,001,215 rows): `q1_v2` 6.0 ms (kernel only 1.4 ms), against `q1_v1` 11.6 ms (7.2 ms). Polars 19.3 ms, DuckDB 23.7 ms, pandas 352.7 ms. `q1_v2` is 3.23x faster than Polars.
-   - SF10 (59,986,052 rows): `q1_v2` 64.7 ms (kernel only 11.4 ms), against `q1_v1` 110.1 ms (66.2 ms). Polars 141.3 ms, DuckDB 188.2 ms, pandas 3,544.2 ms. `q1_v2` is 2.18x faster than Polars.
-   - The kernel alone is 5.82x faster at SF10 (11.4 against 66.2 ms) and 5.16x faster at SF1 (1.4 against 7.2 ms).
+4. The result. `q1_v2` beats every CPU engine end to end (pinned) at both sizes (v1.2.0 sweep):
+   - SF1 (6,001,215 rows): `q1_v2` 5.9 ms (kernel only 1.3 ms), against `q1_v1` 11.6 ms (7.1 ms). Polars 17.6 ms, DuckDB 25.8 ms, pandas 348.7 ms. `q1_v2` is 3.00x faster than Polars.
+   - SF10 (59,986,052 rows): `q1_v2` 54.3 ms (kernel only 11.4 ms), against `q1_v1` 109.1 ms (66.2 ms). Polars 148.3 ms, DuckDB 197.7 ms, pandas 3,745.4 ms. `q1_v2` is 2.73x faster than Polars.
+   - The kernel alone is 5.82x faster at SF10 (11.4 against 66.2 ms) and 5.34x faster at SF1 (1.3 against 7.1 ms).
    - Nsight Compute on `q1_v2` (SF10): 9,994 shared atomic instructions (296,781,817 for `q1_v1`). L1/TEX 12.94% (81.67%), Compute (SM) 34.35% (74.73%). DRAM 98.54 GB/s (17.39 GB/s). ncu gives this as 34.24% of peak, but it measured a DRAM clock of 8.99 GHz in this run and 11.99 GHz in the `q1_v1` run, so the two percentages do not compare directly. The GB/s values do. Occupancy is 33.14% (33.33% theoretical), limited by the 96 registers (`q1_v1`: 66.47%, 64 registers). ncu's statement: compute and memory throughput are both below 60% of peak, which "typically indicate[s] latency issues".
+5. Narrow columns, `q1_v3`. After step 4 the copy was most of the time: at SF10, end to end minus kernel only was 43.0 ms of the 54.3 ms. So `q1_v3` reads fewer bytes. The measured SF10 ranges fit in smaller types: price 90,091 to 10,494,950 cents (int32), quantity 1 to 50 whole units (uint8), discount 0 to 10 and tax 0 to 8 hundredths (uint8), ship date 8,036 to 10,561 days, stored as days since 1992-01-02 (uint16), group id (uint8). That is 10 bytes per row instead of 19 (599.9 MB at SF10 instead of 1,139.7 MB). Each thread loads 4 rows at once: 16 bytes of price, 8 bytes of ship date and 4 bytes of each 1-byte column. The last n % 4 rows go through a one-row loop. The plan is the same as `q1_v2`, and the sums stay exact 64-bit integers. `__launch_bounds__(256, 2)` keeps 2 blocks per SM: the kernel uses 128 registers with 776 bytes of local memory. Without it, the kernel used 156 registers and fit only 1 block per SM, and was slower (5.71 against 4.54 ms in a scratch run).
+   - Fairness: the CPU engines also ran on the same narrow columns (`polars_narrow`, `duckdb_narrow`, `pandas_narrow`). They cast to int64 before the products. The comparisons below are narrow against narrow.
+   - SF1: `q1_v3` 2.9 ms (kernel only 0.5 ms). Polars 16.4 ms narrow (17.6 ms wide), DuckDB 25.7 ms narrow (25.8 ms wide), pandas 354.4 ms narrow (348.7 ms wide). `q1_v3` is 5.68x faster than Polars narrow.
+   - SF10: `q1_v3` 27.3 ms (kernel only 4.7 ms). Polars 133.6 ms narrow (148.3 ms wide), DuckDB 209.6 ms narrow (197.7 ms wide), pandas 3,556.6 ms narrow (3,745.4 ms wide). `q1_v3` is 4.89x faster than Polars narrow.
+   - Against `q1_v2`: the kernel is 2.44x faster at SF10 (4.7 against 11.4 ms) and end to end is 1.99x faster (27.3 against 54.3 ms).
+   - Nsight Systems (SF10): the copy to the GPU takes 22.67 ms for 599.9 MB (26.5 GB/s), against 42.82 ms for 1,139.7 MB (26.6 GB/s) for `q1_v2`. The link speed is the same; there are half the bytes.
+   - Nsight Compute (SF10): 4.46 ms (11.59 ms for `q1_v2`). DRAM 136.03 GB/s (98.54 GB/s), both at the 8.99 GHz DRAM clock. L1/TEX 15.75% (12.94%), Compute (SM) 83.06% (34.35%). Occupancy 26.94% achieved, 33.33% theoretical, limited by registers. ncu counts 0 local memory spill requests. ncu's statement: the kernel uses "greater than 80.0% of the available compute or memory performance", so the limit is now SM compute, not latency.
 
-The win gets smaller as the data gets bigger, because the copies now take most of the time. At SF10, end to end minus kernel only is 53.3 ms of the 64.7 ms. The copy to the GPU is 1,139.7 MB (6 columns). With pageable memory, or with the encoding counted, the GPU would lose more of its lead. I did not measure those cases for Q1.
+The copies are still most of the GPU time. At SF10, end to end minus kernel only is 22.7 ms of the 27.3 ms for `q1_v3`. With pageable memory, or with the encoding counted, the GPU would lose more of its lead. I did not measure those cases for Q1.
 
 What is timed:
 
-- The columns are encoded once, before the timers, for all engines: price in cents (int64), quantity, discount and tax in hundredths (int16), ship date in days (int32), group id (uint8). That is 19 bytes per row. Every engine gets the same encoded integer columns and computes the products, sums and averages inside its timed query. The encoding itself is not timed for any engine.
+- The columns are encoded once, before the timers, for all engines: price in cents (int64), quantity, discount and tax in hundredths (int16), ship date in days (int32), group id (uint8). That is 19 bytes per row. The narrow columns (10 bytes per row, step 5) are made from these, also before the timers. Every engine gets the same encoded integer columns (wide for the CPU engines, `q1_v1` and `q1_v2`; narrow for the `_narrow` engines and `q1_v3`) and computes the products, sums and averages inside its timed query. The encoding itself is not timed for any engine.
 - Every engine's result is checked against DuckDB's own Q1 answer on the original table before it is timed.
 - Overflow: at SF10 the largest sum is sum_charge, 6,799,146,657,523,920,000, which is 0.737 of 2^63. Thus the int64 sums are safe at SF10 but not much above it.
 - Threads: pandas 1, Polars 20, DuckDB 20.
@@ -85,9 +92,10 @@ These are kernel-only times at 100M rows. The block strategy is 5.90x faster tha
 
 Nsight Systems and Nsight Compute results are in [docs/profiling.md](docs/profiling.md). For Q1 at SF10, under the lock:
 
-- Each run is 1 kernel launch, 1 memset, 6 copies to the GPU (1,139.7 MB) and 1 copy back (288 bytes).
+- Each run is 1 kernel launch, 1 memset, 6 copies to the GPU (1,139.7 MB wide, 599.9 MB narrow) and 1 copy back (288 bytes).
 - `q1_v1` used 4.90% of the DRAM bandwidth (17.39 GB/s). It was limited by the L1/shared-memory pipe (81.67%), where the shared atomic adds run, and by SM issue (74.73%), not by memory.
 - `q1_v2` keeps the totals in registers and runs 9,994 shared atomic instructions instead of 296,781,817. L1/TEX falls to 12.94%, DRAM rises to 98.54 GB/s, and the kernel takes 11.59 ms in ncu (65.87 ms for `q1_v1`). Occupancy is 33.14%, limited by 96 registers per thread.
+- `q1_v3` reads 10 bytes per row instead of 19. The copy to the GPU takes 22.67 ms instead of 42.82 ms at the same 26.5 GB/s. The kernel takes 4.46 ms in ncu at 136.03 GB/s DRAM and 83.06% Compute (SM), so it is now compute bound.
 
 ## What is inside
 
@@ -99,17 +107,19 @@ The kernels are in `engine/`. Each file has one job.
   - `strategy="global"`: one thread per row, and one atomic update of the global table per row.
   - `strategy="block"`: each block takes 4,096 rows and first adds them up in a 1,024-slot table in shared memory (16 KB). After 32 probes without a free slot, a row goes straight to the global table. At the end, each key in the shared table goes to the global table once per block.
   - After the insert, the used slots are compacted with the same flag, scan and scatter steps as the filter.
-- `engine/q1.py`: `q1_sums(..., kernel="v1")` runs the fused `q1_v1` or `q1_v2` kernel (see the Q1 section), and `q1_rows(...)` computes the 3 averages on the host from the sums.
-- `benchmarks/tpch_data.py`: makes the TPC-H data with DuckDB (`CALL dbgen(sf=...)`), saves it in `C:\data\gpu-analytics-engine`, encodes the Q1 columns, and saves DuckDB's Q1 answer as the reference.
+- `engine/q1.py`: `q1_sums(..., kernel="v1")` runs the fused `q1_v1` or `q1_v2` kernel, or `q1_v3` from `engine/q1_narrow.py` (see the Q1 section), and `q1_rows(...)` computes the 3 averages on the host from the sums.
+- `engine/q1_narrow.py`: the `q1_v3` kernel on narrow columns with 4-row vector loads. It rejects wrong types and misaligned input.
+- `benchmarks/tpch_data.py`: makes the TPC-H data with DuckDB (`CALL dbgen(sf=...)`), saves it in `C:\data\gpu-analytics-engine`, encodes the Q1 columns, and saves DuckDB's Q1 answer as the reference. `narrow()` makes the 10-byte columns and raises an error if a value does not fit its type.
 
 ## How I tested it
 
-- Every kernel has a pytest check against pandas (filter and group-by), NumPy (scan) or DuckDB (Q1). The tests are in `tests/`, and 179 tests pass.
+- Every kernel has a pytest check against pandas (filter and group-by), NumPy (scan) or DuckDB (Q1). The tests are in `tests/`, and 200 tests pass.
 - The filter tests use 1, 255, 256, 257 and 1,000,000 rows (sizes around the 256-thread block). They use 0, 1, 10, 50, 90 and 100% selectivity, for both scan options.
 - The scan tests also use 511, 512, 513 (around the 512-element block), 262,145 (three levels of recursion) and 100,000,000 elements.
 - The group-by tests use 1 to 1,000,000 distinct keys, uniform and Zipf keys, and both strategies. Other tests cover the fallback from the shared table to the global table and a table that is too small (it must raise an error). They also cover input that must be rejected.
 - The Q1 tests run both kernels (`q1_v1` and `q1_v2`) and compare them with DuckDB's Q1 answer at SF0.01 and SF1. Two more cases are checked against pandas: no rows pass the date filter, and one group with 1, 4,095, 4,096, 4,097 and 100,000 rows (sizes around the 4,096 rows of one block).
-- `compute-sanitizer --tool memcheck` runs the full test suite with the CuPy memory pool off (`cupy.cuda.set_allocator(None)`). The pool rounds each allocation up to 512 bytes and hides small overruns. The result is 0 errors. The scan and the block group-by also pass racecheck (0 hazards), and the block group-by passes synccheck (0 errors). For Q1, the three tools ran on `tests/test_q1.py` only (both kernels): memcheck 0 errors, racecheck 0 hazards, synccheck 0 errors.
+- The `q1_v3` tests (21) compare it with DuckDB at SF0.01 and SF1, and with pandas for all 6 groups at 1, 2, 3, 4, 5, 1,023, 1,024, 1,025 and 100,003 rows (row counts that are not a multiple of 4 test the leftover loop). Other cases: no rows pass, only the leftover rows pass, wide types and misaligned input are rejected, and `narrow()` raises an error for values out of range.
+- `compute-sanitizer --tool memcheck` runs the full test suite with the CuPy memory pool off (`cupy.cuda.set_allocator(None)`). The pool rounds each allocation up to 512 bytes and hides small overruns. The result is 0 errors. The scan and the block group-by also pass racecheck (0 hazards), and the block group-by passes synccheck (0 errors). For v1.2.0: memcheck on the full suite (200 tests) 0 errors; racecheck and synccheck on the Q1 tests (37 tests, all three kernels) 0 hazards and 0 errors.
 - A limit of racecheck: it does not find races between shared-memory atomics and plain shared-memory reads. When I removed the second barrier in the block kernel, the count was wrong (3,947 of 4,096), but racecheck still reported 0 hazards. Thus, the pandas tests are the real check for the block kernels.
 
 ## Benchmark method
@@ -137,7 +147,7 @@ The kernels are in `engine/`. Each file has one job.
 - The GPU has 8 GB of memory. The group-by table needs 24 bytes per slot, so about 2^27 groups fit. The group-by raises MemoryError before it allocates a table that is too big. This memory check does not count the inputs or the outputs.
 - The caller must give `expected_groups`. A value that is too low raises an error, and a value that is too high wastes memory. The group-by output is in hash order, not key order.
 - At 1M uniform groups and 100M rows, an `expected_groups` value 2x too high made the block kernel 1.93x slower. A value 10x too high made it 2.46x slower. This was one run at stock clocks, outside the CSVs.
-- Q1: the group ids are fixed to the 6 TPC-H (returnflag, linestatus) pairs, and the largest int64 sum is at 0.737 of 2^63 at SF10. A bigger scale factor needs wider sums.
+- Q1: the group ids are fixed to the 6 TPC-H (returnflag, linestatus) pairs, and the largest int64 sum is at 0.737 of 2^63 at SF10. A bigger scale factor needs wider sums. The narrow ship date (uint16 days since 1992-01-02) and int32 price fit TPC-H data at any scale factor, because dbgen keeps the same ranges; `narrow()` raises an error if a value does not fit.
 - Copy speed: in Nsight Systems (session 1, stock clocks) the filter copy to the GPU ran at 26.4 GB/s and the group-by copy at 22.2 GB/s. I did not find the cause of this 16% gap.
 - Nsight Compute reports the DRAM clock as 8.99 GHz in session 1 (stock clocks) and 11.99 GHz under the lock. The DRAM % of peak uses that clock, so the DRAM % values of the two sessions are not directly comparable.
 - The times are at a locked 945 MHz SM clock, which is slower than stock. This is a laptop GPU. A desktop card or a data-center GPU may give different crossover points.

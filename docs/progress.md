@@ -46,6 +46,11 @@
 - Q1 rerun under the lock (Best performance on AC, 8.15 GB RAM free). `q1_v2` e2e pinned: SF1 5.967 ms (Polars 19.298), SF10 64.675 ms (Polars 141.298). Kernel only at SF10: 11.380 against 66.244 ms for `q1_v1` (5.8x).
 - ncu on `q1_v2`: 9,994 shared atomics (296,781,817 before), L1/TEX 12.94%, DRAM 98.54 GB/s (17.39 before). Limit now: latency at 33% occupancy.
 
+- 2026-11-28: v1.2.0, `q1_v3` on narrow columns (10 bytes per row, not 19) with 4-row vector loads, in `engine/q1_narrow.py`. 200 tests pass. memcheck (full suite) 0 errors; racecheck 0 hazards and synccheck 0 errors on the 37 Q1 tests.
+- Q1 rerun under the lock (Best performance on AC, 8.96 GB RAM free), CPU engines on wide and narrow columns. SF10 e2e pinned: `q1_v3` 27.342 ms against Polars narrow 133.602 ms (4.89x); `q1_v2` 54.336 ms. Kernel only: 4.655 against 11.377 ms (2.44x).
+- nsys SF10 H2D: 22.672 ms for 599.9 MB (`q1_v3`) against 42.821 ms for 1,139.7 MB (`q1_v2`), both about 26.5 GB/s.
+- ncu on `q1_v3`: 4.46 ms, DRAM 136.03 GB/s, Compute (SM) 83.06%. Limit now: SM compute.
+
 ## Next
 
-- Frozen at v1.1.0. No new features. Reset the clocks after work: `nvidia-smi -rgc` and `nvidia-smi -rmc`.
+- Frozen at v1.2.0. No new features. Reset the clocks after work: `nvidia-smi -rgc` and `nvidia-smi -rmc`.

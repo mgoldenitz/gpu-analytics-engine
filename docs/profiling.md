@@ -251,3 +251,32 @@ argument `v2` for `profile_q1`):
 & $ncu --import "$p\ncu_q1_v2_lock945.ncu-repz" --page details --csv > "$p\ncu_q1_v2_lock945_details.csv"
 & $ncu --import "$p\ncu_q1_v2_lock945.ncu-repz" --page raw --csv > "$p\ncu_q1_v2_lock945_raw.csv"
 ```
+
+## Q1 narrow columns, v1.2.0 (2026-11-28, under the lock)
+
+`q1_v3` is `q1_v2` on narrow columns (10 bytes per row, not 19) with 4-row vector loads, and
+`__launch_bounds__(256, 2)`. Files: `C:\data\gpu-analytics-engine\q1_narrow\` (`q1_v2_timeline`,
+`q1_v3_timeline`, `q1_*_stats_*.csv`, `ncu_q1_v3_lock945.*`). Each run started after the benchmark
+checks passed (free RAM 8.34 and 9.12 GB, Best performance overlay, AC power, no process above 5%).
+
+Nsight Systems, SF10, iterations 1 to 3, median:
+
+- q1_v2 wide: H2D 42.82 ms for 1,139.7 MB (26.6 GB/s), kernel 11.40 ms, iteration about 55.1 ms.
+- q1_v3 narrow: H2D 22.67 ms for 599.9 MB (26.5 GB/s), kernel 4.44 ms, iteration about 27.7 ms.
+- The PCIe speed is the same. Half the bytes give half the copy time.
+
+Nsight Compute, q1_v3 against q1_v2 (`--launch-skip 3`, `--clock-control none`, SM 945 MHz,
+DRAM 8.99 GHz in both reports, so about 287.8 GB/s peak for both):
+
+- Duration 4.46 ms (11.59 ms).
+- DRAM 136.03 GB/s (98.54 GB/s), 0.606 GB read (1.14 GB). 47.27% of peak (34.24%).
+- L1/TEX 15.75% (12.94%), Compute (SM) 83.06% (34.35%).
+- 128 registers per thread (96). The compiler reports 776 bytes of local memory; ncu counts
+  0 local memory spill requests, so the spill code does not run in the loop.
+- Occupancy 26.94% achieved / 33.33% theoretical (33.14% / 33.33%), limited by registers,
+  2 blocks per SM, grid 52 blocks of 256 threads.
+- Shared atomic instructions 10,016, L2 reduction sectors 364.
+- ncu: "utilizing greater than 80.0% of the available compute or memory performance". The
+  limit is now SM compute (the masked adds over 6 groups, 6 sums each), not memory or latency.
+
+Commands (the same as for q1_v2, with `v3` in place of `v2`; nsys with `-o "$p\q1_v3_timeline"`).

@@ -1,11 +1,13 @@
 """Workload for Nsight Systems and Nsight Compute: TPC-H Q1 at SF10, the e2e_pinned path.
 
-Each iteration: H2D copy of the 6 encoded columns from pinned memory, q1_sums (fill + q1_v1 or q1_v2),
-D2H copy of the 288-byte result. 3 warmup and 3 profiled iterations, one NVTX range each.
+Each iteration: H2D copy of the 6 encoded columns from pinned memory, q1_sums (fill + q1_v1, q1_v2 or q1_v3),
+D2H copy of the 288-byte result.
+v1 and v2 copy the wide columns (19 bytes per row), v3 the narrow ones (10 bytes per row).
+3 warmup and 3 profiled iterations, one NVTX range each.
 Every result is checked against the DuckDB Q1 reference (benchmarks/bench_q1.check).
 
 Run from the project root (normally under nsys or ncu, see docs/profiling.md):
-  python -m benchmarks.profile_q1 [v1|v2]   (default v1)
+  python -m benchmarks.profile_q1 [v1|v2|v3]   (default v1)
 """
 import csv
 import sys
@@ -27,6 +29,8 @@ def main():
     kernel = sys.argv[1] if len(sys.argv) > 1 else "v1"
     _, cutoff = tpch_data.cutoff_days()
     c = tpch_data.encode(SF)
+    if kernel == "v3":
+        c, cutoff = tpch_data.narrow(c), tpch_data.narrow_cutoff(cutoff)
     with open(tpch_data.expected_path(SF), newline="") as fh:
         expected = list(csv.DictReader(fh))
     pin = {}

@@ -43,6 +43,9 @@ CUTOFF_SQL = "SELECT (date '1998-12-01' - interval '90' day)::DATE"
 RETURNFLAGS = ["A", "N", "R"]
 LINESTATUSES = ["F", "O"]
 GROUPS = len(RETURNFLAGS) * len(LINESTATUSES)  # 6 slots; TPC-H data uses 4 of them
+# Narrow shipdate = days since 1992-01-02 (8036 days since 1970), the earliest shipdate the
+# TPC-H spec allows (STARTDATE 1992-01-01 + 1) and the measured minimum at SF1 and SF10.
+SHIP_BASE = 8036
 
 
 def db_path(sf):
@@ -112,6 +115,32 @@ def encode(sf):
             "ship": cols["ship"].astype(np.int32), "gid": cols["gid"].astype(np.uint8)}
 
 
+def narrow(c):
+    """The wide encode() columns in the smallest exact types (10 bytes per row, not 19).
+
+    price cents int32, qty whole units uint8, disc and tax hundredths uint8,
+    ship uint16 days since SHIP_BASE, gid uint8. Raises ValueError if a value does not fit,
+    so a bigger scale factor fails here instead of wrapping around.
+    """
+    if (c["qty"] % 100).any():
+        raise ValueError("qty has a fraction; it cannot be whole units")
+    out = {"price": c["price"], "qty": c["qty"] // 100, "disc": c["disc"], "tax": c["tax"],
+           "ship": c["ship"].astype(np.int64) - SHIP_BASE, "gid": c["gid"]}
+    types = {"price": np.int32, "qty": np.uint8, "disc": np.uint8, "tax": np.uint8,
+             "ship": np.uint16, "gid": np.uint8}
+    for name, t in types.items():
+        lo, hi = np.iinfo(t).min, np.iinfo(t).max
+        if out[name].size and (out[name].min() < lo or out[name].max() > hi):
+            raise ValueError(f"{name} does not fit in {np.dtype(t).name}")
+        out[name] = out[name].astype(t)
+    return out
+
+
+def narrow_cutoff(cutoff):
+    """The Q1 cutoff (days since 1970) in the narrow ship units."""
+    return cutoff - SHIP_BASE
+
+
 def sum_bounds(c):
     """Largest possible sum of each aggregate: every row in one group, every row at the maximum."""
     n = c["price"].size
@@ -128,7 +157,11 @@ def main(scales):
     day, days = cutoff_days()
     print(f"cutoff = {day} = {days} days since 1970-01-01")
     if "10" in scales:
-        b = sum_bounds(encode("10"))
+        wide = encode("10")
+        for name, c in [("wide", wide), ("narrow", narrow(wide))]:
+            per_row = sum(a.itemsize for a in c.values())
+            print(f"SF10 {name:6s} {per_row} bytes per row, {sum(a.nbytes for a in c.values()):,} bytes")
+        b = sum_bounds(wide)
         for k, v in b.items():
             print(f"SF10 bound {k:15s} {v:>26,}  {'< 2^63' if v < 2**63 else 'OVER 2^63'}")
         if max(b.values()) >= 2**63:
