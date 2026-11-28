@@ -9,6 +9,10 @@ Status: frozen on 2026-11-28, v1.2.0. No new features.
 - Filter, 100M rows, 10% selectivity: Polars wins. It takes 15.5 ms. The GPU takes 42.6 ms end to end (pinned), and its kernels alone take 21.6 ms.
 - Group-by, 100M rows, 10 groups: the block kernel is 5.90x faster than the global kernel (27.0 ms against 159.4 ms).
 
+<img src="docs/figures/system_overview.svg" width="400" alt="Query path: pinned host memory, copy to GPU, kernel (filter, group-by or Q1), copy back">
+
+Every query copies its columns to the GPU first, and that copy decides who wins: the GPU wins only when its kernel saves more time than the copy costs. In the figure, copy time = end to end minus kernel only.
+
 ## The GPU clock is locked at 945 MHz
 
 All GPU times in the CSVs and charts were measured with the SM clock locked at 945 MHz and the memory clock at 12001 MHz (`nvidia-smi -lgc 945,945` and `nvidia-smi -lmc 12001,12001`, as administrator).
@@ -44,6 +48,8 @@ Q1 filters lineitem on the ship date, groups by (returnflag, linestatus), and co
    - Against `q1_v2`: the kernel is 2.44x faster at SF10 (4.7 against 11.4 ms) and end to end is 1.99x faster (27.3 against 54.3 ms).
    - Nsight Systems (SF10): the copy to the GPU takes 22.67 ms for 599.9 MB (26.5 GB/s), against 42.82 ms for 1,139.7 MB (26.6 GB/s) for `q1_v2`. The link speed is the same; there are half the bytes.
    - Nsight Compute (SF10): 4.46 ms (11.59 ms for `q1_v2`). DRAM 136.03 GB/s (98.54 GB/s), both at the 8.99 GHz DRAM clock. L1/TEX 15.75% (12.94%), Compute (SM) 83.06% (34.35%). Occupancy 26.94% achieved, 33.33% theoretical, limited by registers. ncu counts 0 local memory spill requests. ncu's statement: the kernel uses "greater than 80.0% of the available compute or memory performance", so the limit is now SM compute, not latency.
+
+![Q1 kernel steps: v1 shared atomics, v2 register totals, v3 narrow columns](docs/figures/q1_kernel_story.svg)
 
 The copies are still most of the GPU time. At SF10, end to end minus kernel only is 22.7 ms of the 27.3 ms for `q1_v3`. With pageable memory, or with the encoding counted, the GPU would lose more of its lead. I did not measure those cases for Q1.
 
@@ -123,6 +129,8 @@ The kernels are in `engine/`. Each file has one job.
 - A limit of racecheck: it does not find races between shared-memory atomics and plain shared-memory reads. When I removed the second barrier in the block kernel, the count was wrong (3,947 of 4,096), but racecheck still reported 0 hazards. Thus, the pandas tests are the real check for the block kernels.
 
 ## Benchmark method
+
+![Benchmark pipeline for filter, group-by and Q1: pre-run checks, GPU clock lock at 945 MHz, input data, CPU and GPU runs, check against pandas (filter, group-by) or the DuckDB answer (Q1), median time, per-window clock check, CSV, charts](docs/figures/benchmark_pipeline.svg)
 
 - Hardware: NVIDIA GeForce RTX 5060 Laptop GPU (sm_120, 8,151 MiB, 55 W), Intel Core 9 270H, 31.7 GB RAM, Windows 11 Home. NVIDIA driver 621.24. SM clock locked at 945 MHz and memory at 12001 MHz (see above).
 - Software: Python 3.14.7, CuPy (cupy-cuda13x) 14.2.0 with CUDA runtime 13.2, NumPy 2.5.5, pandas 3.1.1, Polars 2.2.0, DuckDB 2.0.1, pyarrow 26.0.1. compute-sanitizer is from CUDA toolkit 13.5. These versions were read on 2026-11-26. Exact versions are in `requirements.txt`.
