@@ -1,5 +1,7 @@
 # GPU Analytics Engine
 
+New to GPUs or databases? Start with the [plain-language overview](README_SIMPLE.md).
+
 Hand-written CUDA filter, hash group-by and TPC-H Q1 kernels in CuPy RawKernel, benchmarked against pandas, Polars and DuckDB on an RTX 5060 Laptop GPU.
 
 Status: frozen on 2026-11-28, v1.2.0. No new features.
