@@ -9,9 +9,9 @@ Status: frozen on 2026-11-28, v1.2.0. No new features.
 - Filter, 100M rows, 10% selectivity: Polars wins. It takes 15.5 ms. The GPU takes 42.6 ms end to end (pinned), and its kernels alone take 21.6 ms.
 - Group-by, 100M rows, 10 groups: the block kernel is 5.90x faster than the global kernel (27.0 ms against 159.4 ms).
 
-<img src="docs/figures/system_overview.svg" width="400" alt="Query path: pinned host memory, copy to GPU, kernel (filter, group-by or Q1), copy back">
-
 Every query copies its columns to the GPU first, and that copy decides who wins: the GPU wins only when its kernel saves more time than the copy costs. In the figure, copy time = end to end minus kernel only.
+
+<img src="docs/figures/system_overview.svg" alt="Query path, left to right: pinned host memory, copy to GPU, GPU kernel, copy back, result in host memory; under the kernel, the filter, group-by and Q1 results">
 
 ## The GPU clock is locked at 945 MHz
 
