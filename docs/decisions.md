@@ -35,3 +35,8 @@
 - Q1 is checked against DuckDB's answer (saved CSV per SF), not pandas.
 - Q1 modes are kernel_only and e2e_pinned only. Benchmark SFs are 1 and 10; SF0.01 and SF1 are for the tests.
 - `exclusive_scan` checks that the int64 total fits int32 and raises OverflowError. The filter and group-by call `_scan` (no check), because 0/1 flags total at most n and the check costs a full pass over the data.
+- Q1 `q1_v2` (v1.1.0): ncu showed `q1_v1` limited by shared atomics (L1/TEX 81.67%, DRAM 4.90%). Each thread keeps 36 u64 totals in registers and adds with a mask (no branch on the group). Then a warp shuffle reduce, one shared atomic per non-zero sum per warp, one global atomic per non-zero sum per block. Totals stay exact u64.
+- `q1_v2` grid = SMs x blocks per SM from the occupancy API (26 x 2 = 52 blocks of 256). More blocks only add flushes; the grid-stride loop covers all rows.
+- `q1_v2` layout: all 36 totals in each thread, not only the totals of a subset of groups. It uses 96 registers with no spill, and it is correct for any mix of the 6 group ids. The cost is 33% occupancy.
+- `q1_v1` stays in `engine/q1.py` and in the tests and CSV, as the before point. `kernel="v1"` stays the default, so old calls do not change.
+- Charts (`plot_q1.py`): `q1_v2` lines use the GPU style; `q1_v1` lines use the same colour and markers but are dotted and 1.5 wide, so the old kernel reads as the reference.

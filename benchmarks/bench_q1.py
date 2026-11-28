@@ -5,10 +5,12 @@ before any timing. Each engine computes the products, sums and averages inside i
 query. Every result is checked against DuckDB's Q1 answer on the original table first.
 
 Writes benchmarks/results/tpch_q1.csv.  Run from the project root:  python -m benchmarks.bench_q1
+With --gpu-only, the CPU rows of the existing CSV are kept and only the GPU kernels are timed.
 """
 import csv
 import math
 import os
+import sys
 from pathlib import Path
 
 import cupy as cp
@@ -23,6 +25,7 @@ from engine.q1 import AGGS, GROUPS, NAMES, q1_rows, q1_sums
 
 OUT = Path(__file__).parent / "results" / "tpch_q1.csv"
 BENCH_SCALES = ["1", "10"]
+KERNELS = ["v1", "v2"]  # engine/q1.py
 SUMS = ["count_order", "sum_qty", "sum_base_price", "sum_disc_price", "sum_charge"]
 SCALED = {"sum_qty": 2, "sum_base_price": 2, "sum_disc_price": 4, "sum_charge": 6}
 AVGS = ["avg_qty", "avg_price", "avg_disc"]
@@ -106,7 +109,7 @@ def check(engine, got, expected):
         raise AssertionError(f"{engine} result differs from the DuckDB Q1 reference")
 
 
-def gpu_modes(c, cutoff):
+def gpu_modes(c, cutoff, kernel):
     d = {k: cp.asarray(v) for k, v in c.items()}
     pin = {}
     for k, v in c.items():  # inputs already in pinned memory, as in bench_groupby
@@ -115,9 +118,10 @@ def gpu_modes(c, cutoff):
     out_d = cp.zeros(GROUPS * AGGS, dtype=cp.uint64)
     out_pin = pinned_empty(GROUPS * AGGS, np.uint64)
     modes = {
-        "kernel_only": lambda: q1_sums(**d, cutoff=cutoff, out=out_d),
+        "kernel_only": lambda: q1_sums(**d, cutoff=cutoff, out=out_d, kernel=kernel),
         "e2e_pinned": lambda: q1_rows(to_host_pinned(
-            q1_sums(**{k: cp.asarray(v) for k, v in pin.items()}, cutoff=cutoff).ravel(),
+            q1_sums(**{k: cp.asarray(v) for k, v in pin.items()}, cutoff=cutoff,
+                    kernel=kernel).ravel(),
             out_pin).reshape(GROUPS, AGGS)),
     }
     return modes, d, pin
@@ -136,41 +140,50 @@ def event_ms(fn, runs=10):
     return float(np.median(times))
 
 
-def bench_sf(sf, cutoff, rows, threads_seen):
+def bench_sf(sf, cutoff, rows, threads_seen, gpu_only):
     c = tpch_data.encode(sf)
     with open(tpch_data.expected_path(sf), newline="") as fh:
         expected = list(csv.DictReader(fh))
     n = c["price"].size
-    engines, threads = cpu_engines(c, cutoff)
-    threads_seen.update(threads)
-    for name, f in engines.items():
-        check(f"{name} SF{sf}", rows_of(f()), expected)
-        rows.append((sf, n, name, "cpu", threads[name], median_ms(f)))
-        print(f"SF{sf} {name}: {rows[-1][-1]:.2f} ms", flush=True)
-    del engines
-    modes, d, pin = gpu_modes(c, cutoff)
-    for mode, f in modes.items():
-        r = f()
-        check(f"gpu {mode} SF{sf}", rows_of(r if mode != "kernel_only" else
-                                            q1_rows(cp.asnumpy(r))), expected)
-        warm_gpu(f)
-        rows.append((sf, n, "gpu_q1", mode, "-", median_ms(f)))
-        print(f"SF{sf} gpu {mode}: {rows[-1][-1]:.2f} ms", flush=True)
-        if mode == "kernel_only":  # a second guard against a slow GPU clock state
-            ev = event_ms(f)
-            print(f"SF{sf} gpu kernel by CUDA events: {ev:.2f} ms", flush=True)
-            if abs(rows[-1][-1] - ev) > 0.10 * ev:
-                raise SystemExit("harness and CUDA-event kernel times differ by more than 10%")
-    del modes, d, pin, c
+    if not gpu_only:
+        engines, threads = cpu_engines(c, cutoff)
+        threads_seen.update(threads)
+        for name, f in engines.items():
+            check(f"{name} SF{sf}", rows_of(f()), expected)
+            rows.append((sf, n, name, "cpu", threads[name], median_ms(f)))
+            print(f"SF{sf} {name}: {rows[-1][-1]:.2f} ms", flush=True)
+        del engines
+    for kernel in KERNELS:
+        modes, d, pin = gpu_modes(c, cutoff, kernel)
+        for mode, f in modes.items():
+            r = f()
+            check(f"gpu {kernel} {mode} SF{sf}", rows_of(r if mode != "kernel_only" else
+                                                         q1_rows(cp.asnumpy(r))), expected)
+            warm_gpu(f)
+            rows.append((sf, n, f"gpu_q1_{kernel}", mode, "-", median_ms(f)))
+            print(f"SF{sf} gpu {kernel} {mode}: {rows[-1][-1]:.2f} ms", flush=True)
+            if mode == "kernel_only":  # a second guard against a slow GPU clock state
+                ev = event_ms(f)
+                print(f"SF{sf} gpu {kernel} kernel by CUDA events: {ev:.2f} ms", flush=True)
+                if abs(rows[-1][-1] - ev) > 0.10 * ev:
+                    raise SystemExit("harness and CUDA-event kernel times differ by more than 10%")
+        del modes, d, pin
+    del c
     cp.get_default_memory_pool().free_all_blocks()
     cp.get_default_pinned_memory_pool().free_all_blocks()
 
 
 def main():
     _, cutoff = tpch_data.cutoff_days()
+    gpu_only = "--gpu-only" in sys.argv
     rows, threads = [], {}
+    if gpu_only:  # keep the CPU rows of the last full run (from the published CSV)
+        with (Path(__file__).parent / "results" / "tpch_q1.csv").open(newline="") as fh:
+            rows = [(r["sf"], r["rows"], r["engine"], r["mode"], r["threads"],
+                     float(r["median_ms"])) for r in csv.DictReader(fh) if r["mode"] == "cpu"]
     for sf in BENCH_SCALES:
-        bench_sf(sf, cutoff, rows, threads)
+        bench_sf(sf, cutoff, rows, threads, gpu_only)
+    rows.sort(key=lambda r: float(r[0]))  # SF1 rows first, CPU before GPU (stable sort)
     with OUT.open("w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["sf", "rows", "engine", "mode", "threads", "median_ms"])

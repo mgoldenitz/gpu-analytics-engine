@@ -42,6 +42,10 @@
 - Profiling session 2 (Q1 under the lock): DRAM 4.90%, L1/TEX 81.67%. The bottleneck is shared atomics, not bytes.
 - 2026-11-27: README rewritten with the locked numbers and the lock statement. Status: frozen on 2026-11-27, tag v1.0.0.
 
+- 2026-11-28: v1.1.0, Q1 kernel fix. `q1_v2` (register totals, warp shuffle, one shared add per warp). 179 tests pass. memcheck (full suite) 0 errors; racecheck 0 hazards and synccheck 0 errors on the Q1 tests.
+- Q1 rerun under the lock (Best performance on AC, 8.15 GB RAM free). `q1_v2` e2e pinned: SF1 5.967 ms (Polars 19.298), SF10 64.675 ms (Polars 141.298). Kernel only at SF10: 11.380 against 66.244 ms for `q1_v1` (5.8x).
+- ncu on `q1_v2`: 9,994 shared atomics (296,781,817 before), L1/TEX 12.94%, DRAM 98.54 GB/s (17.39 before). Limit now: latency at 33% occupancy.
+
 ## Next
 
-- Frozen. No new features. Reset the clocks after work: `nvidia-smi -rgc` and `nvidia-smi -rmc`.
+- Frozen at v1.1.0. No new features. Reset the clocks after work: `nvidia-smi -rgc` and `nvidia-smi -rmc`.

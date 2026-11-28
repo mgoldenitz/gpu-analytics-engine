@@ -1,13 +1,14 @@
 """Workload for Nsight Systems and Nsight Compute: TPC-H Q1 at SF10, the e2e_pinned path.
 
-Each iteration: H2D copy of the 6 encoded columns from pinned memory, q1_sums (fill + q1_block),
+Each iteration: H2D copy of the 6 encoded columns from pinned memory, q1_sums (fill + q1_v1 or q1_v2),
 D2H copy of the 288-byte result. 3 warmup and 3 profiled iterations, one NVTX range each.
 Every result is checked against the DuckDB Q1 reference (benchmarks/bench_q1.check).
 
 Run from the project root (normally under nsys or ncu, see docs/profiling.md):
-  python -m benchmarks.profile_q1
+  python -m benchmarks.profile_q1 [v1|v2]   (default v1)
 """
 import csv
+import sys
 
 import cupy as cp
 import numpy as np
@@ -23,6 +24,7 @@ WARMUP, PROFILED = 3, 3
 
 
 def main():
+    kernel = sys.argv[1] if len(sys.argv) > 1 else "v1"
     _, cutoff = tpch_data.cutoff_days()
     c = tpch_data.encode(SF)
     with open(tpch_data.expected_path(SF), newline="") as fh:
@@ -38,7 +40,7 @@ def main():
             with rng("q1 H2D"):
                 d = {k: cp.asarray(v) for k, v in pin.items()}
             with rng("q1 kernel"):
-                sums = q1_sums(**d, cutoff=cutoff)
+                sums = q1_sums(**d, cutoff=cutoff, kernel=kernel)
             with rng("q1 D2H"):
                 got = q1_rows(to_host_pinned(sums.ravel(), out_pin).reshape(GROUPS, AGGS))
         check(f"q1 {label}", rows_of(got), expected)

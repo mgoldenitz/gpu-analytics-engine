@@ -25,14 +25,18 @@ def as_int(text, decimals):
     return int(whole + frac)
 
 
+KERNELS = ["v1", "v2"]
+
+
+@pytest.mark.parametrize("kernel", KERNELS)
 @pytest.mark.parametrize("sf", tpch_data.REPO_SCALES)
-def test_q1_matches_duckdb(sf):
+def test_q1_matches_duckdb(sf, kernel):
     if not tpch_data.parquet_path(sf).exists():
         pytest.skip(f"run python -m benchmarks.tpch_data {sf} first")
     with open(tpch_data.expected_path(sf), newline="") as fh:
         expected = list(csv.DictReader(fh))
     _, cutoff = tpch_data.cutoff_days()
-    got = q1(**to_device(tpch_data.encode(sf)), cutoff=cutoff)
+    got = q1(**to_device(tpch_data.encode(sf)), cutoff=cutoff, kernel=kernel)
 
     assert [(r["l_returnflag"], r["l_linestatus"]) for r in got] == \
            [(e["l_returnflag"], e["l_linestatus"]) for e in expected]
@@ -55,18 +59,20 @@ def small_table(gid, ship):
             "ship": ship.astype(np.int32), "gid": gid.astype(np.uint8)}
 
 
-def test_q1_no_rows_pass():
+@pytest.mark.parametrize("kernel", KERNELS)
+def test_q1_no_rows_pass(kernel):
     cols = small_table(np.zeros(1000), np.full(1000, 10_000))
-    assert q1(**to_device(cols), cutoff=9_999) == []
+    assert q1(**to_device(cols), cutoff=9_999, kernel=kernel) == []
 
 
+@pytest.mark.parametrize("kernel", KERNELS)
 @pytest.mark.parametrize("n", [1, 4095, 4096, 4097, 100_000])  # sizes around one block's rows
-def test_q1_one_group(n):
+def test_q1_one_group(n, kernel):
     rng = np.random.default_rng(3)
     ship = rng.integers(9_000, 11_000, n)
     cols = small_table(np.full(n, 3), ship)  # group 3 = N,O
     cutoff = 10_471
-    got = q1(**to_device(cols), cutoff=cutoff)
+    got = q1(**to_device(cols), cutoff=cutoff, kernel=kernel)
 
     df = pd.DataFrame(cols)[cols["ship"] <= cutoff].astype("int64")
     if df.empty:

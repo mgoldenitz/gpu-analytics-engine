@@ -21,19 +21,23 @@ All numbers are from the locked CSVs (SM 945 MHz, memory 12001 MHz), unless a li
 - A browser was open at about 00:50 on 2026-11-27, just after the locked group-by sweep started (00:50:22). I stopped it at 00:53 and ran group-by and Q1 again. The filter cell rerun had ended at 00:46:15, before the browser opened.
 - Some gate outputs (free RAM, power overlay, CPU use) were not saved to a file.
 - The gate for the Q1 ncu run was checked after the run. One sample showed sqlservr at 5.21% CPU, above the 5% limit. ncu counts are not timing, so the run stays.
+- The v1.1.0 Q1 rerun: Windows logged a power source change at 02:33:04 and 02:33:09 (about 5 s on battery), during the CPU-use check of the gate. The power check at 02:33:27 showed AC, and the timed runs were 02:33:28 to 02:33:47, so no run overlapped. Clock log: 8 windows, 0 off lock; 2 windows had no samples after the 1 s skip.
+- The Q1 copy time (about 43 ms H2D at SF10) is from the v1.0.0 nsys run, not rerun for v1.1.0.
 - `filter_noisy_run1.csv` was made with 3.4 GB RAM free. Do not use it.
 
 ## Profiling
 
 - H2D copy speed: 26.4 GB/s for the filter and 22.2 GB/s for the group-by (nsys, session 1, stock clocks). Cause of the gap not measured.
 - ncu reports the DRAM clock as 8.99 GHz (session 1, stock) and 11.99 GHz (locked). The DRAM % values of the two sessions are not directly comparable.
+- In the `q1_v2` ncu run the DRAM clock was 8.99 GHz, not 11.99 GHz as in the `q1_v1` run. So its 34.24% DRAM uses a lower peak. Compare GB/s (98.54 against 17.39). Cause not measured; maybe the 11.6 ms kernel is too short to keep the memory at P0 under ncu replay.
+- `q1_v2` occupancy is 33%, limited by 96 registers. ncu says the kernel is latency bound now.
 - ncu changes the clocks unless `--clock-control none` is set. Its default base clock gave 1.44 GHz (superseded run in docs/profiling.md).
 
 ## Limits
 
 - Group-by needs `expected_groups`. Too low raises an error, too high wastes memory (2x too high: 1.93x slower, stock run). Output is in hash order.
 - Q1: group ids are fixed to the 6 TPC-H pairs. The largest int64 sum is at 0.737 of 2^63 at SF10.
-- Sanitizers for Q1 ran on `tests/test_q1.py` only, not on the full suite again.
+- Sanitizers for Q1: memcheck ran on the full suite (179 tests) for v1.1.0. racecheck and synccheck ran on `tests/test_q1.py` only.
 - racecheck does not find races between shared atomics and plain shared reads (barrier 2 removed: 3947 of 4096 counted, 0 hazards). The pandas tests are the real check.
 - `exclusive_scan` checks only the total, not partial sums with negative values.
 - The memory check counts the table, flags and scan positions, not inputs or outputs. About 2^27 groups fit in 8 GB.

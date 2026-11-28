@@ -221,3 +221,33 @@ Commands (same paths as session 1):
 & $ncu --import "$p\ncu_q1_block_lock945.ncu-repz" --page details --csv > "$p\ncu_q1_block_lock945.csv"
 & $ncu --import "$p\ncu_q1_block_lock945.ncu-repz" --page raw --csv > "$p\ncu_q1_block_lock945_raw.csv"
 ```
+
+The kernel `q1_block` is named `q1_v1` from v1.1.0. The file names above keep the old name.
+
+## Q1 kernel fix, v1.1.0 (2026-11-28, under the lock)
+
+`q1_v2` keeps the 36 sums in registers per thread (grid-stride loop, masked adds), adds them
+across each warp with 5 `__shfl_down_sync` steps, then does one shared atomic add per non-zero sum
+per warp and one global atomic add per non-zero sum per block. Grid 52 blocks of 256 threads
+(2 per SM from the occupancy API, 26 SMs). Files: `C:\data\gpu-analytics-engine\profiles\ncu_q1_v2_lock945.*`.
+
+Nsight Compute, q1_v2 against q1_v1 (SF10, `--launch-skip 3`, `--clock-control none`, SM 945 MHz):
+
+- Duration 11.59 ms (q1_v1 65.87 ms).
+- Shared atomic instructions 9,994 (296,781,817). L2 reduction sectors 364 (102,522).
+- L1/TEX 12.94% (81.67%), Compute (SM) 34.35% (74.73%), L2 13.89% (2.44%).
+- DRAM 98.54 GB/s (17.39 GB/s), 1.14 GB read. ncu gives 34.24% of peak, but at a DRAM clock of
+  8.99 GHz (about 287.8 GB/s peak). The q1_v1 run had 11.99 GHz. Compare GB/s, not percent.
+- 96 registers per thread, 0 local memory spill requests, 288 bytes static shared memory.
+- Occupancy 33.14% achieved / 33.33% theoretical, limited by registers (2 blocks per SM).
+- ncu: "low compute throughput and memory bandwidth utilization relative to the peak", which
+  "typically indicate[s] latency issues". The next limit is latency at low occupancy, not atomics.
+
+Command (the same as above, with the kernel name, the output name, 3 more metrics and the
+argument `v2` for `profile_q1`):
+
+```
+& $ncu --clock-control none --section SpeedOfLight --section MemoryWorkloadAnalysis --section Occupancy --section LaunchStats --metrics "smsp__inst_executed_op_shared_atom.sum,lts__t_sectors_op_red.sum,dram__bytes.sum,dram__bytes.sum.peak_sustained,dram__cycles_elapsed.avg.per_second,dram__bytes.sum.per_second,l1tex__data_pipe_lsu_wavefronts_mem_shared.sum,launch__registers_per_thread,smsp__cycles_active.avg.per_second" -k "regex:^q1_v2$" --launch-skip 3 --launch-count 1 -f -o "$p\ncu_q1_v2_lock945" $py -m benchmarks.profile_q1 v2
+& $ncu --import "$p\ncu_q1_v2_lock945.ncu-repz" --page details --csv > "$p\ncu_q1_v2_lock945_details.csv"
+& $ncu --import "$p\ncu_q1_v2_lock945.ncu-repz" --page raw --csv > "$p\ncu_q1_v2_lock945_raw.csv"
+```
