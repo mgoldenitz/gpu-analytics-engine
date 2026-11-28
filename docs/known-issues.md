@@ -24,6 +24,7 @@ All numbers are from the locked CSVs (SM 945 MHz, memory 12001 MHz), unless a li
 - The v1.1.0 Q1 rerun: Windows logged a power source change at 02:33:04 and 02:33:09 (about 5 s on battery), during the CPU-use check of the gate. The power check at 02:33:27 showed AC, and the timed runs were 02:33:28 to 02:33:47, so no run overlapped. Clock log: 8 windows, 0 off lock; 2 windows had no samples after the 1 s skip.
 - Q1 H2D at SF10 (nsys, v1.2.0, under the lock): 42.821 ms for 1,139.7 MB (`q1_v2` wide), 22.672 ms for 599.9 MB (`q1_v3` narrow), both about 26.5 GB/s.
 - The v1.2.0 sweep gave `q1_v2` SF10 e2e pinned 54.336 ms, against 64.675 ms in v1.1.0. The kernel did not change (11.377 against 11.380 ms), so the copy changed. Cause not measured.
+- `q1_v2` SF10 e2e pinned was 64.7 ms in v1.1.0 and 53.9 to 57.8 ms on 2026-11-28 (3 runs under the lock, 03:27 to 03:36). H2D was 42.5 to 46.4 ms, and the PCIe link read gen5 x8 in every sample. Cause not measured.
 - v1.2.0 sweep: 12 windows, 0 off lock; 3 windows had no samples after the 1 s skip.
 - The gate for the v1.2.0 ncu run had one sample with msedgewebview2 at 10.45% CPU. The average check passed. ncu counts are not timing, so the run stays.
 - `filter_noisy_run1.csv` was made with 3.4 GB RAM free. Do not use it.
